@@ -3,11 +3,28 @@ import jax
 import math
 
 from abc import ABC, abstractmethod
+from jax.scipy.special import gammaln
 
 
 class Scorer(ABC):
     @abstractmethod
-    def local_score(self, adjacency, variable):
+    def local_score(self, variable, parents):
+        """Computes the local score LocalScore(X_j | Pa_G(X_j)).
+
+        Parameters
+        ----------
+        variable : jnp.Array, shape `()`
+            The variable X_j to compute the local-score of.
+
+        parents : jnp.Array, shape `(num_variables,)`
+            The binary mask representing the parents Pa_G(X_j) of X_j in G.
+            This corresponds to the j'th column of the adjacency matrix of G.
+
+        Returns
+        -------
+        local_score : jnp.Array, shape `()`
+            The local score LocalScore(X_j | Pa_G(X_j)).
+        """
         pass
 
     def delta_score(self, adjacency, source, target):
@@ -32,10 +49,11 @@ class Scorer(ABC):
         delta_score : jnp.Array, shape `()`
             The delta-score for adding the edge X_i -> X_j to the graph G.
         """
-        next_adjacency = adjacency.at[source, target].set(True)
+        parents = adjacency[:, target]
+        next_parents = parents.at[source].set(True)
         return (
-            self.local_score(next_adjacency, target)
-            - self.local_score(adjacency, target)
+            self.local_score(target, next_parents)
+            - self.local_score(target, parents)
         )
 
     def log_prob(self, adjacency):
@@ -55,13 +73,12 @@ class Scorer(ABC):
         """
         num_variables = adjacency.shape[0]
         variables = jnp.arange(num_variables)
-        scores = jax.vmap(self.local_score, in_axes=(None, 0))(
-            adjacency, variables)
+        scores = jax.vmap(self.local_score, in_axes=(1, 0))(variables, adjacency)
         return jnp.sum(scores)
 
 
 class ZeroScorer(Scorer):
-    def local_score(self, adjacency, variable):
+    def local_score(self, parents, variable):
         return jnp.zeros(())
 
     def delta_score(self, adjacency, source, target):
@@ -75,11 +92,10 @@ class LinearGaussianScorer(Scorer):
         self.prior_scale = prior_scale
         self.obs_scale = obs_scale
 
-    def local_score(self, adjacency, variable):
+    def local_score(self, variable, parents):
         # https://tristandeleu.notion.site/Linear-Gaussian-Score-16a2ed3422fb4f1fa0b3f554ff57f67d
         num_samples, num_variables = self.data.shape
-        mask = adjacency[:, variable]
-        masked_data = self.data * mask
+        masked_data = self.data * parents
 
         mean = self.prior_mean * jnp.sum(masked_data, axis=1)
         diff = (self.data[variable] - mean) / self.obs_scale
@@ -100,7 +116,6 @@ class LinearGaussianScorer(Scorer):
 
 class BGeScorer(Scorer):
     def __init__(self, data, mean_obs=None, alpha_mu=1., alpha_w=None):
-        # TODO: Work In Progress
         num_variables = data.shape[1]
         if mean_obs is None:
             mean_obs = jnp.zeros((num_variables,))
@@ -124,10 +139,28 @@ class BGeScorer(Scorer):
             * jnp.dot((data_mean - self.mean_obs).T, data_mean - self.mean_obs)
         )
         all_parents = jnp.arange(self.num_variables)
-        # self.log_gamma_term = (
-        #     0.5 * (math.log(self.alpha_mu) - math.log(self.num_samples + self.alpha_mu))
-        #     + gammaln(0.5 * (self.num_samples + self.alpha_w - self.num_variables + all_parents + 1))
-        #     - gammaln(0.5 * (self.alpha_w - self.num_variables + all_parents + 1))
-        #     - 0.5 * self.num_samples * math.log(math.pi)
-        #     + 0.5 * (self.alpha_w - self.num_variables + 2 * all_parents + 1) * math.log(self.t)
-        # )
+        self.log_gamma_term = (
+            0.5 * (math.log(self.alpha_mu) - math.log(self.num_samples + self.alpha_mu))
+            + gammaln(0.5 * (self.num_samples + self.alpha_w - self.num_variables + all_parents + 1))
+            - gammaln(0.5 * (self.alpha_w - self.num_variables + all_parents + 1))
+            - 0.5 * self.num_samples * math.log(math.pi)
+            + 0.5 * (self.alpha_w - self.num_variables + 2 * all_parents + 1) * math.log(self.t)
+        )
+
+    def local_score(self, variable, parents):
+        def _logdet(array, mask):
+            mask = jnp.outer(mask, mask)
+            array = mask * array + (1. - mask) * jnp.eye(self.num_variables)
+            _, logdet = jnp.linalg.slogdet(array)
+            return logdet
+
+        num_parents = jnp.sum(parents)
+        parents_and_variable = parents.at[variable].set(True)
+        factor = self.num_samples + self.alpha_w - self.num_variables + num_parents
+
+        log_term_r = (
+            0.5 * factor * _logdet(self.R, parents)
+            - 0.5 * (factor + 1) * _logdet(self.R, parents_and_variable)
+        )
+
+        return self.log_gamma_term[num_parents] + log_term_r
