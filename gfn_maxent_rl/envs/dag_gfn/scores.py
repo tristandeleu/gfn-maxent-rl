@@ -73,7 +73,7 @@ class Scorer(ABC):
         """
         num_variables = adjacency.shape[0]
         variables = jnp.arange(num_variables)
-        scores = jax.vmap(self.local_score, in_axes=(1, 0))(variables, adjacency)
+        scores = jax.vmap(self.local_score, in_axes=(0, 1))(variables, adjacency)
         return jnp.sum(scores)
 
 
