@@ -7,6 +7,9 @@ from jax.scipy.special import gammaln
 
 
 class Scorer(ABC):
+    def __init__(self, data):
+        self.data = data
+
     @abstractmethod
     def local_score(self, variable, parents):
         """Computes the local score LocalScore(X_j | Pa_G(X_j)).
@@ -87,7 +90,7 @@ class ZeroScorer(Scorer):
 
 class LinearGaussianScorer(Scorer):
     def __init__(self, data, prior_mean=0., prior_scale=1., obs_scale=math.sqrt(0.1)):
-        self.data = data
+        super().__init__(data)
         self.prior_mean = prior_mean
         self.prior_scale = prior_scale
         self.obs_scale = obs_scale
@@ -116,13 +119,13 @@ class LinearGaussianScorer(Scorer):
 
 class BGeScorer(Scorer):
     def __init__(self, data, mean_obs=None, alpha_mu=1., alpha_w=None):
+        super().__init__(data)
         num_variables = data.shape[1]
         if mean_obs is None:
             mean_obs = jnp.zeros((num_variables,))
         if alpha_w is None:
             alpha_w = num_variables + 2.
 
-        self.data = data
         self.mean_obs = mean_obs
         self.alpha_mu = alpha_mu
         self.alpha_w = alpha_w
