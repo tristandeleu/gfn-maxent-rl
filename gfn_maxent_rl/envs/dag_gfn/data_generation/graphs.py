@@ -52,6 +52,7 @@ def sample_linear_gaussian(
     graph.graph['type'] = 'linear-gaussian'
 
     # Create the model parameters
+    attrs = {}
     for node in graph.nodes:
         parents = list(graph.predecessors(node))
 
@@ -59,10 +60,12 @@ def sample_linear_gaussian(
         theta = rng.normal(loc_edges, scale_edges, size=(len(parents),))
 
         # Add CPD & observation scale
-        nx.set_node_attributes(graph, {
+        attrs[node] = {
             'parents': parents,
             'cpd': theta,
             'bias': 0.,  # No bias term by default
             'obs_scale': obs_scale
-        })
+        }
+    nx.set_node_attributes(graph, attrs)
+
     return graph

@@ -32,7 +32,7 @@ class DAGEnvironment(jumanji.Environment[DAGState]):
     scorer : `Scorer` instance
         The marginal likelihood P(D | G).
     """
-    def __init__(self, prior, scorer=ZeroScorer()):
+    def __init__(self, prior, scorer=ZeroScorer(data=None)):
         self.prior = prior
         self.scorer = scorer
         self.num_nodes = prior.num_variables
