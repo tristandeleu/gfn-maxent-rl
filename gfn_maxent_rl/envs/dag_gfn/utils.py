@@ -6,7 +6,7 @@ def to_graphs_tuple(adjacencies, size):
     num_graphs, num_variables = adjacencies.shape[:2]
     counts, senders, receivers = jnp.nonzero(adjacencies, size=size, fill_value=-1)
 
-    n_node = jnp.full((num_graphs,), num_variables, dtype=jnp.int_)
+    n_node = jnp.full((num_graphs,), num_variables, dtype=jnp.int32)
     n_node = jnp.append(n_node, 1)  # Padding
 
     counts = jnp.where(counts < 0, num_graphs, counts)
@@ -44,7 +44,7 @@ def trajectory_to_graphs_tuple(actions, length, num_variables):
     # The number of nodes in each graph is equal to the number of variables,
     # except the last graph at index "max_length" of each sequence, which is a
     # graph with a single node, used for padding.
-    n_node = jnp.full((max_length,), num_variables, dtype=jnp.int_)
+    n_node = jnp.full((max_length,), num_variables, dtype=jnp.int32)
     n_node = jnp.append(n_node, 1)  # Padding
 
     # Nodes:
@@ -67,7 +67,7 @@ def trajectory_to_graphs_tuple(actions, length, num_variables):
     # All the edges are encoded with the same embedding (with index "1"). There
     # are a total of "max_edges_in_sequence" edges in all the graphs of a
     # sequence (including the padding graph).
-    edges = jnp.ones((max_edges_in_sequence,), dtype=jnp.int_)
+    edges = jnp.ones((max_edges_in_sequence,), dtype=jnp.int32)
 
     indices, offsets = jnp.tril_indices(max_length - 1)
     offsets = offsets + 1

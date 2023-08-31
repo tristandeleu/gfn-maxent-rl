@@ -38,7 +38,7 @@ class DAGEnvironment(jumanji.Environment[DAGState]):
         self.num_nodes = prior.num_variables
 
     def reset(self, key: chex.PRNGKey) -> Tuple[DAGState, types.TimeStep[DAGObservation]]:
-        state = DAGState.init(self.num_nodes)
+        state = DAGState.init(self.num_nodes, key)
         timestep = types.restart(
             observation=DAGObservation.from_state(state),
             extras={'is_valid_action': jnp.array(True)}
@@ -66,7 +66,7 @@ class DAGEnvironment(jumanji.Environment[DAGState]):
             return (state, timestep)
 
         def _reset(state, source, target):
-            state = DAGState.init(self.num_nodes)
+            state = DAGState.init(self.num_nodes, state.key)
             timestep = types.termination(
                 reward=jnp.zeros(()),
                 observation=DAGObservation.from_state(state),

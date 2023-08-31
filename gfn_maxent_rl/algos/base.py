@@ -6,47 +6,52 @@ import optax
 from collections import namedtuple
 from abc import ABC, abstractmethod
 
+from gfn_maxent_rl.utils.jnp_utils import batch_random_choice
+from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
+
 
 AlgoParameters = namedtuple('AlgoParameters', ['online', 'target'])
-AlgoState = namedtuple('AlgoState', ['optimizer', 'steps'])
+AlgoState = namedtuple('AlgoState', ['optimizer', 'steps', 'network'])
 
 
 class BaseAlgorithm(ABC):
     def __init__(self, network, update_target_every=0):
-        self.network = hk.without_apply_rng(hk.transform(network))
+        self.network = hk.without_apply_rng(hk.transform_with_state(network))
         self.update_target_every = update_target_every
 
         self._optimizer = None
 
     @abstractmethod
-    def loss(self, online_params, target_params, samples):
+    def loss(self, online_params, target_params, state, samples):
         pass
 
-    def act(self, params, key, observations, epsilon):
+    def act(self, params, state, key, observations, epsilon):
         batch_size = observations.mask.shape[0]
         key, subkey1, subkey2 = jax.random.split(key, 3)
 
         # Get the policies
-        log_pi = self.log_policy(params, observations)  # Get the current policy
-        log_uniform = None  # TODO
+        log_pi = self.log_policy(params, state, observations)  # Get the current policy
+        log_uniform = uniform_log_policy(observations.mask)  # Get uniform policy (exploration)
 
         # Mixture of the policies
         is_exploration = jax.random.bernoulli(subkey1, p=1. - epsilon, shape=(batch_size, 1))
-        log_pi = jnp.where(is_exploration, log_uniform, log_pi)
+        log_probs = jnp.where(is_exploration, log_uniform, log_pi)
 
         # Sample actions
-        actions = None  # TODO
+        actions = batch_random_choice(subkey2, log_probs)
 
         logs = {
-            'is_exploration': is_exploration.astype(jnp.int32)
+            'is_exploration': is_exploration.astype(jnp.int32),
+            'log_probs': log_probs,
         }
         return (actions, key, logs)
 
-    def log_policy(self, params, observations):
-        return self.network.apply(params, observations.graph, observations.mask)
+    def log_policy(self, params, state, observations):
+        log_pi, _ = self.network.apply(params, state, observations.graph, observations.mask)
+        return log_pi
 
     def step(self, params, state, samples):
-        grads, logs = jax.grad(self.loss, has_aux=True)(params.online, params.target, samples)
+        grads, logs = jax.grad(self.loss, has_aux=True)(params.online, params.target, state.network, samples)
 
         # Update the online parameters
         updates, opt_state = self.optimizer.update(grads, state.optimizer, params.online)
@@ -64,20 +69,25 @@ class BaseAlgorithm(ABC):
             target_params = params.target
 
         params = AlgoParameters(online=online_params, target=target_params)
-        state = AlgoState(optimizer=opt_state, steps=state.steps + 1)
+        state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
 
         return (params, state, logs)
 
-    def init(self, key, samples):
+    def init(self, key, samples, normalization=1.):
         # Initialize the network parameters (both online, and possibly target)
-        online_params = self.network.init(key, samples['graph'], samples['mask'])
+        online_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
         target_params = online_params if (self.update_target_every > 0) else None
         params = AlgoParameters(online=online_params, target=target_params)
+
+        # Set the normalization to the size of the dataset
+        net_state['~']['normalization'] = jnp.full_like(
+            net_state['~']['normalization'], normalization)
 
         # Initialize the state
         state = AlgoState(
             optimizer=self.optimizer.init(online_params),
-            steps=jnp.array(0)
+            steps=jnp.array(0),
+            network=net_state
         )
 
         return (params, state)
