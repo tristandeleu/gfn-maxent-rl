@@ -1,64 +1,16 @@
-import jax.numpy as jnp
+import numpy as np
 
-from abc import ABC, abstractmethod
-
-
-class GraphPrior(ABC):
-    def __init__(self, num_variables):
-        self.num_variables = num_variables
-
-    @abstractmethod
-    def log_prob(self, adjacency):
-        """Computes log P(G).
-        
-        Parameters
-        ----------
-        adjacency : jnp.ndarray, shape `(num_variables, num_variables)`
-            The adjacency matrix of the graph G.
-
-        Returns
-        -------
-        log_prob : jnp.ndarray, shape `()`
-            The log-prior of the graph G: log P(G).
-        """
-        pass
-
-    def delta_score(self, adjacency, source, target):
-        """Computes log P(G') - log P(G), where G' is the result of adding the
-        edge X_i -> X_j to G.
-
-        Parameters
-        ----------
-        adjacency : jnp.Array, shape `(num_variables, num_variables)`
-            The adjacency matrix of the graph G.
-
-        source : jnp.Array, shape `()`
-            The index of the source of the edge to be added to G (X_i).
-
-        target : jnp.Array, shape `()`
-            The index of the target of the edge to be added to G (X_j)
-
-        Returns
-        -------
-        delta_score : jnp.Array, shape `()`
-            The difference in log priors log P(G') - log P(G).
-        """
-        next_adjacency = adjacency.at[source, target].set(True)
-        return self.log_prob(next_adjacency) - self.log_prob(adjacency)
-
-    @staticmethod
-    def num_parents(adjacency):
-        return jnp.count_nonzero(adjacency, axis=0)
+from gfn_maxent_rl.envs.dag_gfn.base import GraphPrior
 
 
 class UniformPrior(GraphPrior):
     def __init__(self, num_variables):
         super().__init__(num_variables)
-        self._log_prior = jnp.zeros((num_variables,), dtype=jnp.float32)
+        self._log_prior = np.zeros((num_variables,), dtype=np.float32)
 
-    def log_prob(self, adjacency):
-        num_parents = UniformPrior.num_parents(adjacency)
-        return jnp.sum(self._log_prior[num_parents])
+    def log_prob(self, adjacencies):
+        num_parents = UniformPrior.num_parents(adjacencies)
+        return np.sum(self._log_prior[num_parents], axis=1)
 
-    def delta_score(self, adjacency, source, target):
-        return jnp.zeros(())
+    def delta_score(self, adjacencies, sources, targets):
+        return np.zeros((adjacencies.shape[0],), dtype=np.float32)

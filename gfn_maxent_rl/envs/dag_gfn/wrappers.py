@@ -1,24 +1,19 @@
-import jax.numpy as jnp
-import chex
-
-from jumanji import types, wrappers
-from typing import Tuple
-
-from gfn_maxent_rl.envs.dag_gfn.types import DAGState, DAGObservation
+import numpy as np
+import gym
 
 
-class RewardCorrection(wrappers.Wrapper):
+class RewardCorrection(gym.Wrapper):
     def __init__(self, env, alpha=1.):
         super().__init__(env)
         self.alpha = alpha  # Temperature parameter
 
-    def step(self, state: DAGState, action: chex.Array) -> Tuple[DAGState, types.TimeStep[DAGObservation]]:
-        num_edges = jnp.sum(state.adjacency, dtype=jnp.float32)  # t
-        state, timestep = super().step(state, action)
+    def step(self, actions):
+        num_edges = np.sum(self.env._state['adjacency'], dtype=np.float32)  # t
+        observations, rewards, terminated, truncated, infos = self.env.step(actions)
 
         # Correct the reward by subtracting log(t + 1), where t is the number
         # of edges in the current graph
-        correction = jnp.where(timestep.mid(), -jnp.log1p(num_edges), 0.)
-        timestep = timestep.replace(reward=timestep.reward + self.alpha * correction)
+        correction = np.where(terminated | truncated, -np.log1p(num_edges), 0.)
+        rewards = rewards + self.alpha * correction
 
-        return (state, timestep)
+        return (observations, rewards, terminated, truncated, infos)

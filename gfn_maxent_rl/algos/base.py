@@ -5,8 +5,8 @@ import optax
 
 from collections import namedtuple
 from abc import ABC, abstractmethod
+from functools import partial
 
-from gfn_maxent_rl.utils.jnp_utils import batch_random_choice
 from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
 
 
@@ -25,20 +25,21 @@ class BaseAlgorithm(ABC):
     def loss(self, online_params, target_params, state, samples):
         pass
 
+    @partial(jax.jit, static_argnums=(0,))
     def act(self, params, state, key, observations, epsilon):
-        batch_size = observations.mask.shape[0]
+        batch_size = observations['mask'].shape[0]
         key, subkey1, subkey2 = jax.random.split(key, 3)
 
         # Get the policies
         log_pi = self.log_policy(params, state, observations)  # Get the current policy
-        log_uniform = uniform_log_policy(observations.mask)  # Get uniform policy (exploration)
+        log_uniform = uniform_log_policy(observations['mask'])  # Get uniform policy (exploration)
 
         # Mixture of the policies
         is_exploration = jax.random.bernoulli(subkey1, p=1. - epsilon, shape=(batch_size, 1))
         log_probs = jnp.where(is_exploration, log_uniform, log_pi)
 
         # Sample actions
-        actions = batch_random_choice(subkey2, log_probs)
+        actions = jax.random.categorical(subkey2, logits=log_probs)
 
         logs = {
             'is_exploration': is_exploration.astype(jnp.int32),
@@ -47,7 +48,7 @@ class BaseAlgorithm(ABC):
         return (actions, key, logs)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.network.apply(params, state, observations.graph, observations.mask)
+        log_pi, _ = self.network.apply(params, state, observations['graph'], observations['mask'])
         return log_pi
 
     def step(self, params, state, samples):

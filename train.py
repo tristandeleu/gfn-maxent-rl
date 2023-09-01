@@ -1,15 +1,14 @@
 import jax.numpy as jnp
+import numpy as np
 import jax
 import optax
 
 from numpy.random import default_rng
 from tqdm.auto import trange
-from functools import partial
 
-from gfn_maxent_rl.envs.dag_gfn.utils import to_graphs_tuple
 from gfn_maxent_rl.envs.dag_gfn.policy import policy_network
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
-from gfn_maxent_rl.utils.replay_buffer import ReplayBuffer, _nearest_power_of_2
+from gfn_maxent_rl.utils.replay_buffer import ReplayBuffer
 from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
 
 
@@ -26,14 +25,13 @@ def main(args):
         data=data,
         prior_name=args.prior,
         scorer_name=args.scorer,
+        num_envs=args.num_envs
     )
-    subkeys = jax.random.split(key, args.num_envs)
-    env_state, timesteps = env.reset(subkeys)
 
     # Create the replay buffer
     replay = ReplayBuffer(
         capacity=args.replay_capacity,
-        num_nodes=env.num_nodes,
+        num_variables=env.num_variables,
     )
 
     # Create the algorithm
@@ -44,43 +42,22 @@ def main(args):
     algorithm.optimizer = optax.adam(args.lr)
     params, state = algorithm.init(key, replay.dummy_samples)
 
-    print(state.network)
-
-    @partial(jax.jit, static_argnums=(5,))
-    def env_step(params, state, key, observations, env_state, size):
-        # Get epsilon (for exploration)
-        epsilon = optax.linear_schedule(
-            init_value=jnp.array(0.),
-            end_value=jnp.array(1. - args.min_exploration),
-            transition_steps=args.num_iterations // args.exploration_warmup_prop,
-            transition_begin=args.prefill,
-        )(state.steps)
-
-        # Get the actions from the algorithm, based on previous observations
-        observations = observations.replace(
-            graph=to_graphs_tuple(observations.adjacency, size))
-        actions, key, logs = algorithm.act(
-            params.online, state.network, key, observations, epsilon)
-
-        # Apply the actions to the environments
-        env_state, timesteps = env.step(env_state, actions)
-
-        return (env_state, timesteps, actions, key, logs)
-
-
+    observations, _ = env.reset()
     with trange(args.prefill + args.num_iterations) as pbar:
         for iteration in pbar:
-            env_state, next_timesteps, actions, key, logs = env_step(
-                params,
-                state,
-                key,
-                timesteps.observation,
-                env_state,
-                _nearest_power_of_2(int(timesteps.observation.adjacency.sum())),
-            )
+            epsilon = jnp.array(0.)
+
+            # Sample actions from the model (with exploration)
+            actions, key, logs = algorithm.act(
+                params.online, state.network, key, observations, epsilon)
+            actions = np.asarray(actions)
+
+            # Apply the actions in the environment
+            next_observations, rewards, dones, _, _ = env.step(actions)
+
             # Add the transitions to the replay buffer
-            replay.add(timesteps, actions, next_timesteps)
-            next_timesteps = timesteps
+            replay.add(observations, actions, rewards, dones, next_observations)
+            observations = next_observations
 
 
 if __name__ == '__main__':

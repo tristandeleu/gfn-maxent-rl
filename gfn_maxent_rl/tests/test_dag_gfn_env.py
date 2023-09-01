@@ -1,34 +1,40 @@
-import jax.numpy as jnp
-import jax
+import numpy as np
+
+from numpy.random import default_rng
+from tqdm.auto import trange
 
 from gfn_maxent_rl.envs.dag_gfn import DAGEnvironment, RewardCorrection
 from gfn_maxent_rl.envs.dag_gfn.graph_priors import UniformPrior
+from gfn_maxent_rl.envs.dag_gfn.scores import ZeroScore
+from gfn_maxent_rl.envs.dag_gfn.base import JointModel
 
-def uniform_log_policy(mask):
-    log_p_stop = -jnp.log1p(jnp.sum(mask))
-    log_p_continue = jnp.where(mask.reshape(-1), log_p_stop, -jnp.inf)
-    return jnp.hstack((log_p_continue, log_p_stop))
 
-@jax.jit
-def step(state, timestep, key):
-    # Sample random action
-    log_pi = uniform_log_policy(timestep.observation.mask)
-    key, subkey = jax.random.split(key)
-    action = jax.random.categorical(subkey, logits=log_pi)
-    
+def uniform_log_policy(masks):
+    masks = masks.reshape(masks.shape[0], -1)
+    logp_stop = -np.log1p(np.sum(masks, axis=1, keepdims=True))
+    logp_continue = np.where(masks, logp_stop, -np.inf)
+    return np.concatenate((logp_continue, logp_stop), axis=1)
+
+def sample_random_actions(masks, rng):
+    log_probs = uniform_log_policy(masks)
+    z = rng.gumbel(size=log_probs.shape)
+    return np.argmax(log_probs + z, axis=1)
+
+joint_model = JointModel(
+    graph_prior=UniformPrior(num_variables=5),
+    marginal_likelihood=ZeroScore(data=np.zeros((100, 5)))
+)
+
+rng = default_rng(0)
+
+env = DAGEnvironment(num_envs=8, joint_model=joint_model)
+observations, _ = env.reset()
+
+for _ in trange(10_000):
+    # Sample random actions
+    actions = sample_random_actions(observations['mask'], rng)
+
     # Step in the environment
-    state, timestep = env.step(state, action)
+    observations, rewards, dones, _, _ = env.step(actions)
 
-    return (state, timestep, key)
-
-env = DAGEnvironment(prior=UniformPrior(num_variables=5))
-env = RewardCorrection(env, alpha=1.)
-key = jax.random.PRNGKey(0)
-
-key, subkey = jax.random.split(key)
-state, timestep = env.reset(subkey)
-for _ in range(1000):
-    state, timestep, key = step(state, timestep, key)
-    assert timestep.extras['is_valid_action']
-
-print(state)
+print(observations)

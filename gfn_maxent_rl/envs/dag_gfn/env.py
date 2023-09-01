@@ -1,102 +1,83 @@
-import jax.numpy as jnp
-import jax
-import jumanji
-import chex
+import numpy as np
+import gym
 
-from jumanji import types, specs
-from typing import Tuple
+from gym.spaces import Dict, Box, Discrete
 
-from gfn_maxent_rl.envs.dag_gfn.types import DAGState, DAGObservation
-from gfn_maxent_rl.envs.dag_gfn.scores import ZeroScorer
+from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple
 
 
-class DAGEnvironment(jumanji.Environment[DAGState]):
-    """Environment for DAG-GFlowNet.
+class DAGEnvironment(gym.vector.VectorEnv):
+    def __init__(self, num_envs, joint_model):
+        """GFlowNet environment for learning a distribution over DAGs.
 
-    This is a deterministic environment over the state space of DAGs over d
-    nodes, and where the actions are the d^2 possible edges one can add, with
-    an additional "stop" action. The transitions in this MDP have the form
-    G -> G', where G' is the result of adding a single edge to G. The reward
-    for such a transition is the "delta-score", computed as
+        Parameters
+        ----------
+        num_envs : int
+            Number of parallel environments, or equivalently the number of
+            parallel trajectories to sample.
 
-        r(G, G') = (log P(D | G') + log P(G')) - (log P(D | G) + log P(G))
+        joint_model : JointModel instance
+            The joint model that computes P(D, G) = P(D | G)P(G).
+        """
+        self.joint_model = joint_model
+        self.num_variables = joint_model.num_variables
+        self._state = None
 
-    The reward is specified by the `prior` and `scorer` arguments.
+        shape = (self.num_variables, self.num_variables)
+        observation_space = Dict({
+            'adjacency': Box(low=0., high=1., shape=shape, dtype=np.float32),
+            'mask': Box(low=0., high=1., shape=shape, dtype=np.float32),
+            # We do not include 'graph' in `observation_space` to avoid automatic batching
+        })
+        action_space = Discrete(self.num_variables ** 2 + 1)
+        super().__init__(num_envs, observation_space, action_space)
 
-    Parameters
-    ----------
-    prior : `GraphPrior` instance
-        The prior over graphs P(G). Note that this contains the number of
-        nodes d in the DAGs of the environment.
+    def reset(self, *, seed=None, options=None):
+        shape = (self.num_envs, self.num_variables, self.num_variables)
+        closure_T = np.eye(self.num_variables, dtype=np.bool_)
+        self._state = {
+            'adjacency': np.zeros(shape, dtype=np.bool_),
+            'closure_T': np.tile(closure_T, (self.num_envs, 1, 1)),
+        }
+        return (self.observations(), {})
 
-    scorer : `Scorer` instance
-        The marginal likelihood P(D | G).
-    """
-    def __init__(self, prior, scorer=ZeroScorer(data=None)):
-        self.prior = prior
-        self.scorer = scorer
-        self.num_nodes = prior.num_variables
+    def step(self, actions):
+        sources, targets = divmod(actions, self.num_variables)
+        dones = (sources == self.num_variables)
+        sources, targets = sources[~dones], targets[~dones]
+        truncated = np.zeros((self.num_envs,), dtype=np.bool_)
 
-    def reset(self, key: chex.PRNGKey) -> Tuple[DAGState, types.TimeStep[DAGObservation]]:
-        state = DAGState.init(self.num_nodes, key)
-        timestep = types.restart(
-            observation=DAGObservation.from_state(state),
-            extras={'is_valid_action': jnp.array(True)}
-        )
-        return (state, timestep)
+        # Make sure that all the actions are valid
+        is_invalid = np.logical_or(self._state['adjacency'], self._state['closure_T'])
+        if np.any(is_invalid[~dones, sources, targets]):
+            raise ValueError('Some actions are invalid: either the edge to be '
+                'added is already in the DAG, or adding this edge would lead to a cycle.')
 
-    def step(self, state: DAGState, action: chex.Array) -> Tuple[DAGState, types.TimeStep[DAGObservation]]:
-        source, target = jnp.divmod(action, self.num_nodes)
+        rewards = np.zeros((self.num_envs,), dtype=np.float32)
+        rewards[~dones] = self.joint_model.delta_score(
+            self._state['adjacency'][~dones], sources, targets)
 
-        def _step(state, source, target):
-            is_valid_action = ~jnp.logical_or(
-                state.adjacency[source, target],
-                state.closure_T[source, target]
-            )
-            reward = (
-                self.scorer.delta_score(state.adjacency, source, target)
-                + self.prior.delta_score(state.adjacency, source, target)
-            )
-            state = state.update(source, target)
-            timestep = types.transition(
-                reward=reward,
-                observation=DAGObservation.from_state(state),
-                extras={'is_valid_action': is_valid_action}
-            )
-            return (state, timestep)
+        # Update the adjacency matrices
+        self._state['adjacency'][~dones, sources, targets] = True
+        self._state['adjacency'][dones] = False
 
-        def _reset(state, source, target):
-            state = DAGState.init(self.num_nodes, state.key)
-            timestep = types.termination(
-                reward=jnp.zeros(()),
-                observation=DAGObservation.from_state(state),
-                extras={'is_valid_action': jnp.array(True)}
-            )
-            return (state, timestep)
+        # Update the transpose of the transitive closures
+        source_rows = np.expand_dims(self._state['closure_T'][~dones, sources, :], axis=1)
+        target_cols = np.expand_dims(self._state['closure_T'][~dones, :, targets], axis=2)
+        self._state['closure_T'][~dones] |= np.logical_and(source_rows, target_cols)  # Outer product
+        self._state['closure_T'][dones] = np.eye(self.num_variables, dtype=np.bool_)
 
-        return jax.lax.cond(
-            source == self.num_nodes,
-            _reset, _step,
-            state, source, target
-        )
+        return (self.observations(), rewards, dones, truncated, {})
 
-    def observation_spec(self) -> specs.Spec[DAGObservation]:
-        return specs.Spec(DAGObservation, 'observation',
-            adjacency=specs.BoundedArray(
-                (self.num_nodes, self.num_nodes),
-                dtype=jnp.float32,
-                minimum=0.,
-                maximum=1.,
-                name='adjacency'
-            ),
-            mask=specs.BoundedArray(
-                (self.num_nodes, self.num_nodes),
-                dtype=jnp.float32,
-                minimum=0.,
-                maximum=1.,
-                name='mask'
-            )
-        )
+    def observations(self):
+        size = _nearest_power_of_2(int(self._state['adjacency'].sum()))
+        return {
+            'adjacency': self._state['adjacency'].astype(np.float32),
+            'mask': 1. - np.asarray(self._state['adjacency'] + self._state['closure_T'], dtype=np.float32),
+            'graph': to_graphs_tuple(self._state['adjacency'], size)
+        }
 
-    def action_spec(self) -> specs.DiscreteArray:
-        return specs.DiscreteArray(self.num_nodes ** 2 + 1, name='action')
+
+def _nearest_power_of_2(x):
+    # https://stackoverflow.com/a/14267557
+    return 1 if (x == 0) else (1 << (x - 1).bit_length())
