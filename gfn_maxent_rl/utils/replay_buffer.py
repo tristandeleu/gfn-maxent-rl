@@ -104,6 +104,9 @@ class ReplayBuffer:
         decoded = decoded.reshape(*encoded.shape[:-1], self.num_variables, self.num_variables)
         return decoded.astype(dtype)
 
+    def can_sample(self, batch_size):
+        return len(self) >= batch_size
+
 
 def _nearest_power_of_2(x):
     # https://stackoverflow.com/a/14267557

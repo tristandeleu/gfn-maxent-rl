@@ -51,6 +51,7 @@ class BaseAlgorithm(ABC):
         log_pi, _ = self.network.apply(params, state, observations['graph'], observations['mask'])
         return log_pi
 
+    @partial(jax.jit, static_argnums=(0,))
     def step(self, params, state, samples):
         grads, logs = jax.grad(self.loss, has_aux=True)(params.online, params.target, state.network, samples)
 

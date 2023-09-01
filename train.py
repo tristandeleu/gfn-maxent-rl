@@ -24,7 +24,7 @@ def main(args):
     env = get_dag_gfn_env(
         data=data,
         prior_name=args.prior,
-        scorer_name=args.scorer,
+        score_name=args.score,
         num_envs=args.num_envs
     )
 
@@ -37,15 +37,22 @@ def main(args):
     # Create the algorithm
     algorithm = GFNDetailedBalance(
         network=policy_network,
-        update_target_every=100,  # TODO
+        update_target_every=args.update_target_every,
     )
     algorithm.optimizer = optax.adam(args.lr)
     params, state = algorithm.init(key, replay.dummy_samples)
 
+    exploration_schedule = jax.jit(optax.linear_schedule(
+        init_value=jnp.array(0.),
+        end_value=jnp.array(1. - args.min_exploration),
+        transition_steps=args.num_iterations // args.exploration_warmup_prop,
+        transition_begin=args.prefill,
+    ))
+
     observations, _ = env.reset()
     with trange(args.prefill + args.num_iterations) as pbar:
         for iteration in pbar:
-            epsilon = jnp.array(0.)
+            epsilon = exploration_schedule(iteration)
 
             # Sample actions from the model (with exploration)
             actions, key, logs = algorithm.act(
@@ -59,11 +66,20 @@ def main(args):
             replay.add(observations, actions, rewards, dones, next_observations)
             observations = next_observations
 
+            if iteration >= args.prefill:
+                if replay.can_sample(args.batch_size):
+                    samples = replay.sample(batch_size=args.batch_size, rng=rng)
+                    params, state, logs = algorithm.step(params, state, samples)
+                
+                train_steps = iteration - args.prefill
+                # TODO: Logs in wandb
+
+                pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
+
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
     import json
-    import math
 
     parser = ArgumentParser(description='Comparison between GFlowNets & Maximum Entropy RL.')
 
@@ -76,43 +92,27 @@ if __name__ == '__main__':
         help='Prior over graphs (default: %(default)s)')
     environment.add_argument('--prior_kwargs', type=json.loads, default='{}',
         help='Arguments of the prior over graphs.')
-    environment.add_argument('--scorer', type=str, default='zero',
+    environment.add_argument('--score', type=str, default='zero',
         choices=['zero', 'lingauss', 'bge'],
-        help='Scorer to compute the log-marginal likelihood (default: %(default)s)')
-    environment.add_argument('--scorer_kwargs', type=json.loads, default='{}',
-        help='Arguments of the scorer.')
+        help='Score to compute the log-marginal likelihood (default: %(default)s)')
+    environment.add_argument('--score_kwargs', type=json.loads, default='{}',
+        help='Arguments of the score.')
 
     # # Data
     # data = parser.add_argument_group('Data')
     # data.add_argument('--artifact', type=str, required=True,
     #     help='Path to the artifact for input data in Wandb')
-    # data.add_argument('--obs_scale', type=float, default=math.sqrt(0.1),
-    #     help='Scale of the observation noise (default: %(default)s)')
-
-    # # Model
-    # model = parser.add_argument_group('Model')
-    # model.add_argument('--model', type=str, default='lingauss_diag',
-    #     choices=['lingauss_diag', 'lingauss_full', 'mlp_gauss', 'mdn_gauss',
-    #              'lingauss_true', 'mlp_categorical', 'mlp_gauss_zero_inflated'],
-    #     help='Type of model (default: %(default)s)')
 
     # Optimization
     optimization = parser.add_argument_group('Optimization')
     optimization.add_argument('--lr', type=float, default=1e-5,
         help='Learning rate (default: %(default)s)')
-    # optimization.add_argument('--delta', type=float, default=1.,
-    #     help='Value of delta for Huber loss (default: %(default)s)')
-    # optimization.add_argument('--batch_size', type=int, default=32,
-    #     help='Batch size (default: %(default)s)')
+    optimization.add_argument('--batch_size', type=int, default=128,
+        help='Batch size (default: %(default)s)')
     optimization.add_argument('--num_iterations', type=int, default=100_000,
         help='Number of iterations (default: %(default)s)')
-    # optimization.add_argument('--params_num_samples', type=int, default=1,
-    #     help='Number of samples of model parameters to compute the loss (default: %(default)s)')
-    # optimization.add_argument('--update_target_every', type=int, default=0,
-    #     help='Frequency of update for the target network (0 = no target network)')
-    # optimization.add_argument('--lr_schedule', action='store_true')
-    # optimization.add_argument('--batch_size_data', type=int, default=None,
-    #     help='Batch size for the data (default: %(default)s)')
+    optimization.add_argument('--update_target_every', type=int, default=0,
+        help='Frequency of update for the target network (0 = no target network)')
 
     # Replay buffer
     replay = parser.add_argument_group('Replay Buffer')
