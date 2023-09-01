@@ -28,9 +28,9 @@ class ReplayBuffer:
         self._index = 0
         self._is_full = False
 
-    def add(self, observations, actions, rewards, dones, next_observations):
+    def add(self, observations, actions, rewards, dones, next_observations, indices=None):
         if np.all(dones):
-            return True
+            return None
 
         num_samples = np.sum(~dones)
         add_idx = np.arange(self._index, self._index + num_samples) % self.capacity
@@ -50,7 +50,7 @@ class ReplayBuffer:
             shape = self._replay.dtype[name].shape
             self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
 
-        return True
+        return None
 
     def sample(self, batch_size, rng=default_rng()):
         indices = rng.choice(len(self), size=batch_size, replace=False)
