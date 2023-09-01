@@ -1,4 +1,4 @@
-from gfn_maxent_rl.envs.dag_gfn.scores import ZeroScore
+from gfn_maxent_rl.envs.dag_gfn.scores import ZeroScore, LinearGaussianScore, BGeScore
 from gfn_maxent_rl.envs.dag_gfn.graph_priors import UniformPrior
 from gfn_maxent_rl.envs.dag_gfn.env import DAGEnvironment
 from gfn_maxent_rl.envs.dag_gfn.base import JointModel
@@ -7,8 +7,8 @@ from gfn_maxent_rl.envs.dag_gfn.base import JointModel
 def get_marginal_likelihood(name, data, **kwargs):
     scores = {
         'zero': ZeroScore,
-        # 'lingauss': LinearGaussianScorer,
-        # 'bge': BGeScorer,
+        'lingauss': LinearGaussianScore,
+        'bge': BGeScore,
     }
     if name not in scores:
         valid_scorers = ', '.join(scores.keys())
