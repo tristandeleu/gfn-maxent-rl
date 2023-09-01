@@ -1,7 +1,7 @@
 import numpy as np
 import math
 
-from jax.scipy.special import gammaln
+from scipy.special import gammaln
 
 from gfn_maxent_rl.envs.dag_gfn.base import MarginalLikelihood
 
@@ -44,53 +44,56 @@ class LinearGaussianScore(MarginalLikelihood):
         return -0.5 * (term1 + term2 + term3 + term4 + term5)
 
 
-# class BGeScorer(Scorer):
-#     def __init__(self, data, mean_obs=None, alpha_mu=1., alpha_w=None):
-#         super().__init__(data)
-#         num_variables = data.shape[1]
-#         if mean_obs is None:
-#             mean_obs = jnp.zeros((num_variables,))
-#         if alpha_w is None:
-#             alpha_w = num_variables + 2.
+class BGeScore(MarginalLikelihood):
+    def __init__(self, data, mean_obs=None, alpha_mu=1., alpha_w=None):
+        super().__init__(data)
+        num_variables = data.shape[1]
+        if mean_obs is None:
+            mean_obs = np.zeros((num_variables,))
+        if alpha_w is None:
+            alpha_w = num_variables + 2.
 
-#         self.mean_obs = mean_obs
-#         self.alpha_mu = alpha_mu
-#         self.alpha_w = alpha_w
+        self.mean_obs = mean_obs
+        self.alpha_mu = alpha_mu
+        self.alpha_w = alpha_w
 
-#         self.num_samples, self.num_variables = self.data.shape
-#         self.t = (self.alpha_mu * (self.alpha_w - self.num_variables - 1)) / (self.alpha_mu + 1)
+        self.num_samples, self.num_variables = self.data.shape
+        self.t = (self.alpha_mu * (self.alpha_w - self.num_variables - 1)) / (self.alpha_mu + 1)
 
-#         T = self.t * jnp.eye(self.num_variables)
-#         data_mean = jnp.mean(data, axis=0, keepdims=True)
-#         data_centered = data - data_mean
+        T = self.t * np.eye(self.num_variables)
+        data_mean = np.mean(data, axis=0, keepdims=True)
+        data_centered = data - data_mean
 
-#         self.R = (T + jnp.dot(data_centered.T, data_centered)
-#             + ((self.num_samples * self.alpha_mu) / (self.num_samples + self.alpha_mu))
-#             * jnp.dot((data_mean - self.mean_obs).T, data_mean - self.mean_obs)
-#         )
-#         all_parents = jnp.arange(self.num_variables)
-#         self.log_gamma_term = (
-#             0.5 * (math.log(self.alpha_mu) - math.log(self.num_samples + self.alpha_mu))
-#             + gammaln(0.5 * (self.num_samples + self.alpha_w - self.num_variables + all_parents + 1))
-#             - gammaln(0.5 * (self.alpha_w - self.num_variables + all_parents + 1))
-#             - 0.5 * self.num_samples * math.log(math.pi)
-#             + 0.5 * (self.alpha_w - self.num_variables + 2 * all_parents + 1) * math.log(self.t)
-#         )
+        self.R = (T + np.matmul(data_centered.T, data_centered)
+            + ((self.num_samples * self.alpha_mu) / (self.num_samples + self.alpha_mu))
+            * np.dot((data_mean - self.mean_obs).T, data_mean - self.mean_obs)
+        )
+        all_parents = np.arange(self.num_variables)
+        self.log_gamma_term = (
+            0.5 * (math.log(self.alpha_mu) - math.log(self.num_samples + self.alpha_mu))
+            + gammaln(0.5 * (self.num_samples + self.alpha_w - self.num_variables + all_parents + 1))
+            - gammaln(0.5 * (self.alpha_w - self.num_variables + all_parents + 1))
+            - 0.5 * self.num_samples * math.log(math.pi)
+            + 0.5 * (self.alpha_w - self.num_variables + 2 * all_parents + 1) * math.log(self.t)
+        )
 
-#     def local_score(self, variable, parents):
-#         def _logdet(array, mask):
-#             mask = jnp.outer(mask, mask)
-#             array = mask * array + (1. - mask) * jnp.eye(self.num_variables)
-#             _, logdet = jnp.linalg.slogdet(array)
-#             return logdet
+    def local_score(self, variables, parents):
+        def _logdet(array, mask):
+            mask = mask[:, None, :] * mask[:, :, None]
+            array = mask * array + (1. - mask) * np.eye(self.num_variables)
+            _, logdet = np.linalg.slogdet(array)
+            return logdet
 
-#         num_parents = jnp.sum(parents)
-#         parents_and_variable = parents.at[variable].set(True)
-#         factor = self.num_samples + self.alpha_w - self.num_variables + num_parents
+        num_parents = np.sum(parents, axis=1)  # (num_graphs,)
+        arange = np.arange(parents.shape[0])
+        parents_and_variable = np.copy(parents)  # (num_graphs, num_variables)
+        parents_and_variable[arange, variables] = True
 
-#         log_term_r = (
-#             0.5 * factor * _logdet(self.R, parents)
-#             - 0.5 * (factor + 1) * _logdet(self.R, parents_and_variable)
-#         )
+        factor = self.num_samples + self.alpha_w - self.num_variables + num_parents
 
-#         return self.log_gamma_term[num_parents] + log_term_r
+        log_term_r = (
+            0.5 * factor * _logdet(self.R, parents)
+            - 0.5 * (factor + 1) * _logdet(self.R, parents_and_variable)
+        )
+
+        return self.log_gamma_term[num_parents] + log_term_r
