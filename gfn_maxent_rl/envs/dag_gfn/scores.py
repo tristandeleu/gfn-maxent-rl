@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 from jax.scipy.special import gammaln
 
@@ -13,33 +14,34 @@ class ZeroScore(MarginalLikelihood):
         return np.zeros((adjacencies.shape[0],), dtype=np.float32)
 
 
-# class LinearGaussianScorer(Scorer):
-#     def __init__(self, data, prior_mean=0., prior_scale=1., obs_scale=math.sqrt(0.1)):
-#         super().__init__(data)
-#         self.prior_mean = prior_mean
-#         self.prior_scale = prior_scale
-#         self.obs_scale = obs_scale
+class LinearGaussianScore(MarginalLikelihood):
+    def __init__(self, data, prior_mean=0., prior_scale=1., obs_scale=math.sqrt(0.1)):
+        super().__init__(data)
+        self.prior_mean = prior_mean
+        self.prior_scale = prior_scale
+        self.obs_scale = obs_scale
 
-#     def local_score(self, variable, parents):
-#         # https://tristandeleu.notion.site/Linear-Gaussian-Score-16a2ed3422fb4f1fa0b3f554ff57f67d
-#         num_samples, num_variables = self.data.shape
-#         masked_data = self.data * parents
+    def local_score(self, variables, parents):
+        # https://tristandeleu.notion.site/Linear-Gaussian-Score-16a2ed3422fb4f1fa0b3f554ff57f67d
+        num_samples, num_variables = self.data.shape
+        masked_data = self.data * parents[:, None]
 
-#         mean = self.prior_mean * jnp.sum(masked_data, axis=1)
-#         diff = (self.data[variable] - mean) / self.obs_scale
-#         Y = self.prior_scale * jnp.dot(masked_data.T, diff)
-#         Sigma = (
-#             (self.obs_scale ** 2) * jnp.eye(num_variables)
-#             + (self.prior_scale ** 2) * jnp.matmul(masked_data.T, masked_data)
-#         )
+        means = self.prior_mean * np.sum(masked_data, axis=2)
+        diffs = (self.data[:, variables].T - means) / self.obs_scale
+        Y = self.prior_scale * np.matmul(diffs[:, None], masked_data)
+        Y = np.squeeze(Y, axis=1)
+        Sigma = (
+            (self.obs_scale ** 2) * np.eye(num_variables)
+            + (self.prior_scale ** 2) * np.matmul(masked_data.transpose(0, 2, 1), masked_data)
+        )
 
-#         term1 = jnp.sum(diff ** 2)
-#         term2 = -jnp.vdot(Y, jnp.linalg.solve(Sigma, Y))
-#         _, term3 = jnp.linalg.slogdet(Sigma)
-#         term4 = 2 * (num_samples - num_variables) * math.log(self.obs_scale)
-#         term5 = num_samples * math.log(2 * math.pi)
+        term1 = np.sum(diffs ** 2, axis=1)
+        term2 = -np.sum(Y * np.linalg.solve(Sigma, Y), axis=1)
+        _, term3 = np.linalg.slogdet(Sigma)
+        term4 = 2 * (num_samples - num_variables) * math.log(self.obs_scale)
+        term5 = num_samples * math.log(2 * math.pi)
 
-#         return -0.5 * (term1 + term2 + term3 + term4 + term5)
+        return -0.5 * (term1 + term2 + term3 + term4 + term5)
 
 
 # class BGeScorer(Scorer):
