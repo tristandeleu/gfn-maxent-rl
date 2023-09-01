@@ -2,7 +2,10 @@ import numpy as np
 import jraph
 
 
-def to_graphs_tuple(adjacencies, size):
+def to_graphs_tuple(adjacencies, size=None):
+    if size is None:
+        size = _nearest_power_of_2(int(adjacencies.sum()))
+
     num_graphs, num_variables = adjacencies.shape[:2]
     counts, sources, targets = np.nonzero(adjacencies)
     total_num_edges = counts.size
@@ -35,3 +38,8 @@ def to_graphs_tuple(adjacencies, size):
         n_node=n_node,
         n_edge=n_edge,
     )
+
+
+def _nearest_power_of_2(x):
+    # https://stackoverflow.com/a/14267557
+    return 1 if (x == 0) else (1 << (x - 1).bit_length())

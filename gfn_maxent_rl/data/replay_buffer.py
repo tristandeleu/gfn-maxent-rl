@@ -1,8 +1,8 @@
 import numpy as np
 import math
-import jax
 
 from numpy.random import default_rng
+
 from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple
 
 
@@ -59,18 +59,14 @@ class ReplayBuffer:
         adjacency = self.decode(samples['adjacency'])
         next_adjacency = self.decode(samples['next_adjacency'])
 
-        total_num_edges = int(np.sum(adjacency))
-        size = _nearest_power_of_2(total_num_edges)
-        next_size = _nearest_power_of_2(total_num_edges + batch_size)
-
         return {
             'adjacency': adjacency,
-            'graph': to_graphs_tuple(adjacency, size),
+            'graph': to_graphs_tuple(adjacency),
             'mask': self.decode(samples['mask']),
             'action': samples['action'],
             'reward': samples['reward'],
             'next_adjacency': next_adjacency,
-            'next_graph': to_graphs_tuple(next_adjacency, next_size),
+            'next_graph': to_graphs_tuple(next_adjacency),
             'next_mask': self.decode(samples['next_mask']),
         }
 
@@ -106,8 +102,3 @@ class ReplayBuffer:
 
     def can_sample(self, batch_size):
         return len(self) >= batch_size
-
-
-def _nearest_power_of_2(x):
-    # https://stackoverflow.com/a/14267557
-    return 1 if (x == 0) else (1 << (x - 1).bit_length())

@@ -70,14 +70,8 @@ class DAGEnvironment(gym.vector.VectorEnv):
         return (self.observations(), rewards, dones, truncated, {})
 
     def observations(self):
-        size = _nearest_power_of_2(int(self._state['adjacency'].sum()))
         return {
             'adjacency': self._state['adjacency'].astype(np.float32),
             'mask': 1. - np.asarray(self._state['adjacency'] + self._state['closure_T'], dtype=np.float32),
-            'graph': to_graphs_tuple(self._state['adjacency'], size)
+            'graph': to_graphs_tuple(self._state['adjacency'])
         }
-
-
-def _nearest_power_of_2(x):
-    # https://stackoverflow.com/a/14267557
-    return 1 if (x == 0) else (1 << (x - 1).bit_length())
