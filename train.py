@@ -8,7 +8,7 @@ from tqdm.auto import trange
 
 from gfn_maxent_rl.envs.dag_gfn.policy import policy_network
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
-from gfn_maxent_rl.utils.replay_buffer import ReplayBuffer
+from gfn_maxent_rl.data import ReplayBuffer
 from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
 
 
@@ -66,11 +66,11 @@ def main(args):
             replay.add(observations, actions, rewards, dones, next_observations)
             observations = next_observations
 
-            if iteration >= args.prefill:
-                if replay.can_sample(args.batch_size):
-                    samples = replay.sample(batch_size=args.batch_size, rng=rng)
-                    params, state, logs = algorithm.step(params, state, samples)
-                
+            if (iteration >= args.prefill) and replay.can_sample(args.batch_size):
+                # Sample from the replay buffer, and do one step of gradient
+                samples = replay.sample(batch_size=args.batch_size, rng=rng)
+                params, state, logs = algorithm.step(params, state, samples)
+
                 train_steps = iteration - args.prefill
                 # TODO: Logs in wandb
 
