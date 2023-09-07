@@ -1,0 +1,8 @@
+chex==0.1.5
+optax==0.1.4
+jraph==0.0.6.dev0
+gym>=0.22.0
+pandas
+dm-haiku==0.0.9
+networkx==2.8.7
+tqdm
