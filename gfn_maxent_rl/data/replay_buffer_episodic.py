@@ -4,7 +4,7 @@ import math
 from numpy.random import default_rng
 
 from gfn_maxent_rl.data.replay_buffer import ReplayBuffer
-from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple
+from gfn_maxent_rl.envs.dag_gfn.jraph_utils import batch_sequences_to_graphs_tuple
 
 
 class EpisodicReplayBuffer(ReplayBuffer):
@@ -29,7 +29,7 @@ class EpisodicReplayBuffer(ReplayBuffer):
         self._replay = np.zeros((capacity,), dtype=dtype)
         self._index = 0
 
-    def add(self, observations, actions, rewards, dones, indices=None):
+    def add(self, observations, actions, rewards, dones, next_observations, indices=None):
         if indices is None:
             indices = self._index + np.arange(actions.shape[0])
             self._index += actions.shape[0]
@@ -60,6 +60,17 @@ class EpisodicReplayBuffer(ReplayBuffer):
         indices = rng.choice(self.capacity, batch_size,
             replace=False, p=self.replay['is_complete'] / len(self))
         samples = self._replay[indices]
+
+        actions, lengths = samples['actions'], samples['lengths']
+
+        return {
+            'adjacencies': self.decode(samples['adjacencies']),
+            'graphs': batch_sequences_to_graphs_tuple(self.num_variables, actions, lengths),
+            'masks': self.decode(samples['masks']),
+            'actions': actions,
+            'rewards': samples['rewards'],
+            'lengths': lengths,
+        }
 
     def __len__(self):
         return np.sum(self._replay['is_complete'])
