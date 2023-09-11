@@ -1,6 +1,5 @@
 import numpy as np
 import gym
-import math
 
 from gym.spaces import Box, Discrete
 from numpy.random import default_rng
