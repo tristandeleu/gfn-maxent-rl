@@ -1,6 +1,7 @@
 import numpy as np
 import networkx as nx
 import math
+import warnings
 
 from numpy.random import default_rng
 from itertools import chain, product
@@ -12,12 +13,19 @@ from gfn_maxent_rl.envs.dag_gfn.data_generation.graphs import sample_erdos_renyi
 def factor_graph2_env(
     num_envs,
     num_variables,
+    num_categories,
     rng=default_rng(),
     max_retries=1000,
     max_clique_size=4,
     factor=2.,
 ):
     assert num_variables % 2 == 0
+
+    if num_categories != 2:
+        warnings.warn('The environment `factor_graph2` only accepts binary '
+            'variables, but was instantiated with '
+            f'`num_categories={num_categories}`. Ignoring this argument, '
+            'and using binary variables instead.', stacklevel=2)
 
     # Create a random graph (Erdos-Renyi) with a single connected component
     for _ in range(max_retries):
