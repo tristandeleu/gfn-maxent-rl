@@ -1,4 +1,1 @@
-from gfn_maxent_rl.envs.treesample.chain_env import ChainEnvironment
-from gfn_maxent_rl.envs.treesample.factor_graph1_env import FactorGraph1Environment
-from gfn_maxent_rl.envs.treesample.factor_graph2_env import FactorGraph2Environment
-from gfn_maxent_rl.envs.treesample.permuted_chain_env import PermutedChainEnvironment
+from gfn_maxent_rl.envs.treesample.factor_graph_env import FactorGraphEnvironment
