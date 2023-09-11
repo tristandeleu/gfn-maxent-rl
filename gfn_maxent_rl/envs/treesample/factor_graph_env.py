@@ -38,6 +38,10 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         return (self.observations(), {})
 
     def step(self, actions):
+        # Clear complete episodes
+        is_complete = np.all(self._state != -1, axis=1)
+        self._state[is_complete] = -1
+
         indices, values = actions.T
 
         if np.any(self._state[self._arange, indices] != -1):
@@ -51,7 +55,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
         for clique, potential in self.potentials:
             # Check if the clique is active
-            is_in_clique = np.any(clique == actions[:, None], axis=1)
+            is_in_clique = np.any(clique == indices[:, None], axis=1)
             assignments = self._state[:, clique]
             full_assignment = np.all(assignments != -1, axis=1)
             is_active = np.logical_and(is_in_clique, full_assignment)
@@ -63,7 +67,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             # Add the new potential
             rewards[is_active] += potential[codes]
 
-        dones = np.all(self._state != 1, axis=1)
+        dones = np.all(self._state != -1, axis=1)
         truncated = np.zeros((self.num_envs,), dtype=np.bool_)
 
         return (self.observations(), rewards, dones, truncated, {})
@@ -71,5 +75,5 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
     def observations(self):
         return {
             'variables': np.copy(self._state),
-            'mask': (self._state != -1).astype(np.int_)
+            'mask': (self._state == -1).astype(np.int_)
         }

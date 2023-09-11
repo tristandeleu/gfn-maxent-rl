@@ -46,7 +46,7 @@ def chain_env(
     binary_potentials[X * num_categories + Y] = binary
 
     for edge in graph.edges:
-        potentials.append(np.asarray(edge, dtype=np.int_), binary_potentials)
+        potentials.append((np.asarray(edge, dtype=np.int_), binary_potentials))
 
     permutation = np.arange(num_variables)
 

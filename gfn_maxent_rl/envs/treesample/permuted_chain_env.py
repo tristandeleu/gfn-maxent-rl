@@ -30,7 +30,7 @@ def permuted_chain_env(
 
         potential = np.zeros((num_categories ** 2,), dtype=np.float_)
         potential[X * num_categories + Y] = cond_distributions[target]
-        potentials.append(np.asarray([source, target], dtype=np.int_), potential)
+        potentials.append((np.asarray([source, target], dtype=np.int_), potential))
     
     permutation = np.arange(num_variables)
 
