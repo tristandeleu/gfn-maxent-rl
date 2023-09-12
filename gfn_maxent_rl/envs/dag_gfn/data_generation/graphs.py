@@ -10,15 +10,15 @@ from itertools import chain, product, islice, count
 def sample_erdos_renyi_graph(
         num_variables,
         p=None,
-        num_edges=None,
+        num_edges_per_node=None,
         nodes=None,
         create_using=nx.DiGraph,
         rng=default_rng()
     ):
     if p is None:
-        if num_edges is None:
+        if num_edges_per_node is None:
             raise ValueError('One of p or num_edges must be specified.')
-        p = num_edges / ((num_variables * (num_variables - 1)) / 2.)
+        p = 2. * num_edges_per_node / (num_variables - 1)
     
     if nodes is None:
         uppercase = string.ascii_uppercase
