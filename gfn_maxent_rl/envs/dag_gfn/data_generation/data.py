@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import networkx as nx
+import jax.numpy as jnp
+import pandas as pd
+import pickle
 
 from numpy.random import default_rng
 
@@ -24,3 +27,16 @@ def sample_from_linear_gaussian(graph, num_samples, rng=default_rng()):
                 size=(num_samples,)
             )
     return samples
+
+
+def load_artifact_continuous(artifact_dir):
+    with open(artifact_dir / 'graph.pkl', 'rb') as f:
+        graph = pickle.load(f)
+
+    train = pd.read_csv(artifact_dir / 'train_data.csv', index_col=0, header=0)
+    train = jnp.asarray(train)
+
+    valid = pd.read_csv(artifact_dir / 'valid_data.csv', index_col=0, header=0)
+    valid = jnp.asarray(valid)
+
+    return train, valid, graph

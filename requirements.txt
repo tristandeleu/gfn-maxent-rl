@@ -6,3 +6,4 @@ pandas
 dm-haiku==0.0.9
 networkx==2.8.7
 tqdm
+wandb

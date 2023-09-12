@@ -2,27 +2,40 @@ import jax.numpy as jnp
 import numpy as np
 import jax
 import optax
+import wandb
 
 from numpy.random import default_rng
 from tqdm.auto import trange
+from pathlib import Path
 
 from gfn_maxent_rl.envs.dag_gfn.policy import policy_network
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
+from gfn_maxent_rl.envs.dag_gfn.data_generation.data import load_artifact_continuous
 from gfn_maxent_rl.data import ReplayBuffer
 from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
 
 
 def main(args):
+    api = wandb.Api()
+
     # Set the RNGs for reproducibility
     rng = default_rng(args.seed)
     key = jax.random.PRNGKey(args.seed)
 
-    # Generate dummy data (for tests only). TODO: Load proper data
-    data = jax.random.normal(key, shape=(100, 5))
+    # Get the artifact from wandb
+    artifact = api.artifact(args.artifact)
+    artifact_dir = Path(artifact.download()) / f'{args.seed:02d}'
+    # wandb.config['data'] = artifact.metadata
+
+    if args.seed not in artifact.metadata['seeds']:
+        raise ValueError(f'The seed `{args.seed}` is not in the list of seeds '
+            f'for artifact `{args.artifact}`: {artifact.metadata["seeds"]}')
+
+    train, _, _ = load_artifact_continuous(artifact_dir)
 
     # Create the environment
     env = get_dag_gfn_env(
-        data=data,
+        data=train,
         prior_name=args.prior,
         score_name=args.score,
         num_envs=args.num_envs
@@ -98,10 +111,10 @@ if __name__ == '__main__':
     environment.add_argument('--score_kwargs', type=json.loads, default='{}',
         help='Arguments of the score.')
 
-    # # Data
-    # data = parser.add_argument_group('Data')
-    # data.add_argument('--artifact', type=str, required=True,
-    #     help='Path to the artifact for input data in Wandb')
+    # Data
+    data = parser.add_argument_group('Data')
+    data.add_argument('--artifact', type=str, default='tristandeleu_mila_01/gfn_maxent_rl/er2-lingauss-d005:v0',
+        help='Path to the artifact for input data in Wandb')
 
     # Optimization
     optimization = parser.add_argument_group('Optimization')
