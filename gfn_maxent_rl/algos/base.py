@@ -88,6 +88,10 @@ class BaseAlgorithm(ABC):
     def optimizer(self, value):
         self._optimizer = optax.chain(value, optax.zero_nans())
 
+    @property
+    def use_target(self):
+        return self.update_target_every > 0
+
 
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
@@ -100,7 +104,7 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         # Initialize the network parameters (both online, and possibly target)
         net_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))
-        target_params = online_params if (self.update_target_every > 0) else None
+        target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
         # Set the normalization to the size of the dataset

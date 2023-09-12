@@ -16,7 +16,7 @@ class SoftQLearning(BaseAlgorithm):
             online_params, state, samples['graph'], samples['mask'])
 
         # Get Q(G_t+1, .) for the next graph
-        params = target_params if self.update_target_every > 0 else online_params
+        params = target_params if self.use_target else online_params
         Q_tp1, _ = self.network.apply(
             params, state, samples['next_graph'], samples['next_mask'])
 
@@ -34,7 +34,7 @@ class SoftQLearning(BaseAlgorithm):
     def init(self, key, samples, normalization=1):
         # Initialize the network parameters (both online, and possibly target)
         online_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
-        target_params = online_params if (self.update_target_every > 0) else None
+        target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
         # Set the normalization to the size of the dataset

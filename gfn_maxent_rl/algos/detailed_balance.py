@@ -11,7 +11,7 @@ class GFNDetailedBalance(GFNBaseAlgorithm):
             online_params.network, state, samples['graph'], samples['mask'])
 
         # Get log P_F(. | G_t+1) for the next graph
-        params = target_params if self.update_target_every > 0 else online_params
+        params = target_params if self.use_target else online_params
         log_pi_tp1, _ = self.network.apply(
             params.network, state, samples['next_graph'], samples['next_mask'])
 
