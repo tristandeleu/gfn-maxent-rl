@@ -1,9 +1,14 @@
 import jax.numpy as jnp
 import haiku as hk
 import optax
+import jax
+
+from collections import namedtuple
 
 from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 
+
+SACParameters = namedtuple('SACParameters', ['actor', 'critic1', 'critic2'])
 
 class SAC(BaseAlgorithm):
     def __init__(self, actor_network, critic_network, update_target_every=0): # TODO change stuff in train.py
@@ -19,14 +24,14 @@ class SAC(BaseAlgorithm):
         # Get Q(G_t, .) for the current graph
         Q1_t, _ = self.critic_network.apply( 
             online_params.critic1, state.critic1, samples['graph'], samples['mask'])
-        Q2_t, _ = self.network.apply(
+        Q2_t, _ = self.critic_network.apply(
             online_params.critic2, state.critic2, samples['graph'], samples['mask'])
 
         # Get Q(G_t+1, .) for the next graph
         params = target_params if self.use_target else online_params
-        Q1_tp1, _ = self.network.apply(
+        Q1_tp1, _ = self.critic_network.apply(
             params.critic1, state.critic1, samples['next_graph'], samples['next_mask'])
-        Q2_tp1, _ = self.network.apply(
+        Q2_tp1, _ = self.critic_network.apply(
             params.critic2, state.critic2, samples['next_graph'], samples['next_mask'])
 
         # critic loss
@@ -59,16 +64,22 @@ class SAC(BaseAlgorithm):
         logs = {'loss': loss, 'critic_loss': critic_loss, 'actor_loss': actor_loss}
         return (loss, logs)
 
-
     def init(self, key, samples, normalization=1):
+        subkey1, subkey2, subkey3 = jax.random.split(key, 3)
+
         # Initialize the network parameters (both online, and possibly target)
-        online_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
+        actor_params, actor_state = self.actor_network.init(subkey1, samples['graph'], samples['mask'])
+        critic1_params, critic1_state = self.critic_network.init(subkey2, samples['graph'], samples['mask'])
+        critic2_params, critic2_state = self.critic_network.init(subkey3, samples['graph'], samples['mask'])
+        online_params = SACParameters(actor=actor_params, critic1=critic1_params, critic2=critic2_params)
+
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
         # Set the normalization to the size of the dataset
-        net_state['~']['normalization'] = jnp.full_like(
-            net_state['~']['normalization'], normalization)
+        actor_state['~']['normalization'] = jnp.full_like(
+            actor_state['~']['normalization'], normalization)
+        net_state = SACParameters(actor=actor_state, critic1=critic1_state, critic2=critic2_state)
 
         # Initialize the state
         state = AlgoState(
@@ -80,20 +91,10 @@ class SAC(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.network.apply(
-            params,
-            state,
+        log_pi, _ = self.actor_network.apply(
+            params.actor,
+            state.actor,
             observations['graph'],
             observations['mask']
         )
         return log_pi
-
-    def action_probs(self, log_pi):
-        # log_pi, _ = self.network.apply(
-        #     params,
-        #     state,
-        #     observations['graph'],
-        #     observations['mask']
-        # )
-        
-        return jnp.exp(log_pi)
