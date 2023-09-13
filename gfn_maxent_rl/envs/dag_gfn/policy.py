@@ -44,3 +44,17 @@ def policy_network(graphs, masks):
 
     norm = hk.get_state('normalization', (), init=jnp.ones)
     return log_policy(logits * norm, stop * norm, masks)
+
+
+def q_network(graphs, masks):
+    batch_size = masks.shape[0]
+    features = GNNBackbone(num_layers=1, name='gnn')(graphs, masks)
+
+    senders = hk.nets.MLP([128, 128], name='senders')(features.nodes)
+    receivers = hk.nets.MLP([128, 128], name='receivers')(features.nodes)
+
+    q_values = jax.lax.batch_matmul(senders, receivers.transpose(0, 2, 1))
+    q_values = q_values.reshape(batch_size, -1)
+    q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values.dtype)
+
+    return jnp.concatenate((q_values, q_value_stop), axis=-1)

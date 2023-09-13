@@ -17,6 +17,11 @@ class SAC(BaseAlgorithm):
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
 
     def loss(self, online_params, target_params, state, samples):
+        batch_size = samples['mask'].shape[0]
+        masks_continue = samples['mask'].reshape(batch_size, -1)
+        mask_stop = jnp.ones((batch_size, 1), dtype=masks_continue.dtype)
+        masks = jnp.concatenate((masks_continue, mask_stop), axis=-1)
+
         # actor network
         log_pi, _ = self.actor_network.apply(
             online_params.actor, state.actor, samples['graph'], samples['mask'])
@@ -36,7 +41,8 @@ class SAC(BaseAlgorithm):
 
         # critic loss
         log_pi_nograd = jax.lax.stop_gradient(log_pi)
-        min_Q_tp1 = jnp.exp(log_pi_nograd) * (jnp.min(Q1_tp1, Q2_tp1) - log_pi_nograd)
+        min_Q_tp1 = jnp.exp(log_pi_nograd) * (jnp.minimum(Q1_tp1, Q2_tp1) - log_pi_nograd)
+        min_Q_tp1 = jnp.where(masks == 1., min_Q_tp1, 0.)
         V_tp1 = min_Q_tp1.sum(axis=-1)
 
         # use Q-values only for the taken actions
@@ -55,8 +61,9 @@ class SAC(BaseAlgorithm):
         critic_loss = old_Q1_loss + old_Q2_loss
 
         # actor loss
-        min_Q_t = jax.lax.stop_gradient(jnp.min(Q1_t, Q2_t))
-        actor_loss = jnp.exp(log_pi) * (min_Q_t - log_pi)
+        min_Q_t = jax.lax.stop_gradient(jnp.minimum(Q1_t, Q2_t))
+        actor_loss = jnp.exp(log_pi) * (log_pi - min_Q_t)
+        actor_loss = jnp.where(masks == 1., actor_loss, 0.)
         actor_loss = jnp.sum(actor_loss, axis=-1)
 
         loss = jnp.mean(critic_loss + actor_loss)
