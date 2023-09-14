@@ -58,10 +58,10 @@ class EpisodicReplayBuffer(ReplayBuffer):
 
     def sample(self, batch_size, rng=default_rng()):
         indices = rng.choice(self.capacity, batch_size,
-            replace=False, p=self.replay['is_complete'] / len(self))
+            replace=False, p=self._replay['is_complete'] / len(self))
         samples = self._replay[indices]
 
-        actions, lengths = samples['actions'], samples['lengths']
+        actions, lengths = samples['actions'], samples['length']
 
         return {
             'adjacencies': self.decode(samples['adjacencies']),
