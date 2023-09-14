@@ -11,8 +11,8 @@ from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 SACParameters = namedtuple('SACParameters', ['actor', 'critic1', 'critic2'])
 
 class SAC(BaseAlgorithm):
-    def __init__(self, actor_network, critic_network, update_target_every=0): # TODO change stuff in train.py
-        super().__init__(update_target_every=update_target_every)
+    def __init__(self, env, actor_network, critic_network, update_target_every=0):
+        super().__init__(env, update_target_every=update_target_every)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
 

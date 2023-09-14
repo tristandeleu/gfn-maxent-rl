@@ -26,7 +26,7 @@ def main(config):
     replay = hydra.utils.instantiate(config.replay, env=env)
 
     # Create the algorithm
-    algorithm = hydra.utils.instantiate(config.algorithm)
+    algorithm = hydra.utils.instantiate(config.algorithm, env=env)
     algorithm.optimizer = optax.adam(config.lr)
     params, state = algorithm.init(key, replay.dummy_samples)
 
