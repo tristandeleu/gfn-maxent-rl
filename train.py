@@ -7,35 +7,19 @@ import hydra
 
 from numpy.random import default_rng
 from tqdm.auto import trange
-from pathlib import Path
-
-from gfn_maxent_rl.envs.dag_gfn.data_generation.data import load_artifact_continuous
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
-    api = wandb.Api()
-
     # Set the RNGs for reproducibility
     rng = default_rng(config.seed)
     key = jax.random.PRNGKey(config.seed)
 
-    # Get the artifact from wandb
-    artifact = api.artifact(config.artifact)
-    artifact_dir = Path(artifact.download()) / f'{config.seed:02d}'
-    # wandb.config['data'] = artifact.metadata
-
-    if config.seed not in artifact.metadata['seeds']:
-        raise ValueError(f'The seed `{config.seed}` is not in the list of seeds '
-            f'for artifact `{config.artifact}`: {artifact.metadata["seeds"]}')
-
-    train, _, _ = load_artifact_continuous(artifact_dir)
-
     # Create the environment
-    env = hydra.utils.instantiate(
+    env, _ = hydra.utils.instantiate(
         config.env,
-        data=train,
-        num_envs=config.num_envs
+        num_envs=config.num_envs,
+        seed=config.seed,
     )
 
     # Create the replay buffer

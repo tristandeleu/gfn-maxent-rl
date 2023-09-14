@@ -1,5 +1,8 @@
 _target_: "gfn_maxent_rl.envs.dag_gfn.factories.get_dag_gfn_env"
 
+# Path to the artifact for input data in Wandb
+artifact: "tristandeleu_mila_01/gfn_maxent_rl/er2-lingauss-d005:v0"
+
 # Prior over graphs P(G)
 prior_name: "uniform"
 prior_kwargs: {}
