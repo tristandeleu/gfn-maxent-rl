@@ -7,16 +7,15 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from functools import partial
 
-from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
-
 
 AlgoParameters = namedtuple('AlgoParameters', ['online', 'target'])
 AlgoState = namedtuple('AlgoState', ['optimizer', 'steps', 'network'])
 
 
 class BaseAlgorithm(ABC):
-    def __init__(self, update_target_every=0):
+    def __init__(self, env, update_target_every=0):
         self._optimizer = None
+        self.env = env
         self.update_target_every = update_target_every
 
     @abstractmethod
@@ -37,7 +36,7 @@ class BaseAlgorithm(ABC):
 
         # Get the policies
         log_pi = self.log_policy(params, state, observations)  # Get the current policy
-        log_uniform = uniform_log_policy(observations['mask'])  # Get uniform policy (exploration)
+        log_uniform = self.env.uniform_log_policy(observations)  # Get uniform policy (exploration)
 
         # Mixture of the policies
         batch_size = log_pi.shape[0]
@@ -96,8 +95,8 @@ class BaseAlgorithm(ABC):
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
 class GFNBaseAlgorithm(BaseAlgorithm):
-    def __init__(self, network, update_target_every=0):
-        super().__init__(update_target_every=update_target_every)
+    def __init__(self, env, network, update_target_every=0):
+        super().__init__(env, update_target_every=update_target_every)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def init(self, key, samples, normalization=1):

@@ -5,6 +5,7 @@ import math
 from gym.spaces import Dict, Box, Discrete
 
 from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequences_to_graphs_tuple
+from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -122,3 +123,9 @@ class DAGEnvironment(gym.vector.VectorEnv):
             'graph': batch_sequences_to_graphs_tuple(
                 self.num_variables, samples['actions'], samples['lengths'])
         }
+
+
+    # Method to interact with the algorithm (uniform sampling of action)
+
+    def uniform_log_policy(self, observations):
+        return uniform_log_policy(observations['mask'])
