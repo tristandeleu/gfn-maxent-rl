@@ -16,8 +16,8 @@ class GFNTrajectoryBalance(GFNBaseAlgorithm):
 
     def loss(self, online_params, _, state, samples):
         # Get log P_F(. | G_t) for full trajectory
-        v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0, 0))
-        log_pi, _ = v_model(online_params.network, state, samples['graphs'], samples['masks'])
+        v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0))
+        log_pi, _ = v_model(online_params.network, state, samples['observations'])
 
         # Mask the log-probabilities, based on the sequence lengths
         seq_masks = (jnp.arange(log_pi.shape[1]) <= samples['lengths'][:, None])

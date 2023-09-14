@@ -60,14 +60,18 @@ class ReplayBuffer:
         next_adjacency = self.decode(samples['next_adjacency'])
 
         return {
-            'adjacency': adjacency,
-            'graph': to_graphs_tuple(adjacency),
-            'mask': self.decode(samples['mask']),
+            'observation': {
+                'adjacency': adjacency,
+                'graph': to_graphs_tuple(adjacency),
+                'mask': self.decode(samples['mask']),
+            },
             'action': samples['action'],
             'reward': samples['reward'],
-            'next_adjacency': next_adjacency,
-            'next_graph': to_graphs_tuple(next_adjacency),
-            'next_mask': self.decode(samples['next_mask']),
+            'next_observation': {
+                'adjacency': next_adjacency,
+                'graph': to_graphs_tuple(next_adjacency),
+                'mask': self.decode(samples['next_mask']),
+            },
         }
 
     @property
@@ -78,14 +82,18 @@ class ReplayBuffer:
         graph = to_graphs_tuple(adjacency, 1)
 
         return {
-            'adjacency': adjacency,
-            'graph': graph,
-            'mask': mask,
+            'observation': {
+                'adjacency': adjacency,
+                'graph': graph,
+                'mask': mask,
+            },
             'action': np.array([[self.num_variables ** 2]]),
             'reward': np.zeros((1, 1), dtype=np.float_),
-            'next_adjacency': adjacency,
-            'next_graph': graph,
-            'next_mask': mask,
+            'next_observation': {
+                'adjacency': adjacency,
+                'graph': graph,
+                'mask': mask,
+            },
         }
 
     def __len__(self):

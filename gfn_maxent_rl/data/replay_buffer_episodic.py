@@ -64,9 +64,12 @@ class EpisodicReplayBuffer(ReplayBuffer):
         actions, lengths = samples['actions'], samples['length']
 
         return {
-            'adjacencies': self.decode(samples['adjacencies']),
-            'graphs': batch_sequences_to_graphs_tuple(self.num_variables, actions, lengths),
-            'masks': self.decode(samples['masks']),
+            'observations': {
+                'adjacency': self.decode(samples['adjacencies']),
+                'graph': batch_sequences_to_graphs_tuple(
+                    self.num_variables, actions, lengths),
+                'mask': self.decode(samples['masks']),
+            },
             'actions': actions,
             'rewards': samples['rewards'],
             'lengths': lengths,
