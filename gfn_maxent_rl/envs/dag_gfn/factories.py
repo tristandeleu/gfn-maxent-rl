@@ -1,7 +1,12 @@
+import wandb
+
+from pathlib import Path
+
 from gfn_maxent_rl.envs.dag_gfn.scores import ZeroScore, LinearGaussianScore, BGeScore
 from gfn_maxent_rl.envs.dag_gfn.graph_priors import UniformPrior
 from gfn_maxent_rl.envs.dag_gfn.env import DAGEnvironment
 from gfn_maxent_rl.envs.dag_gfn.base import JointModel
+from gfn_maxent_rl.envs.dag_gfn.data_generation.data import load_artifact_continuous
 
 
 def get_marginal_likelihood(name, data, **kwargs):
@@ -27,17 +32,31 @@ def get_graph_prior(name, num_variables, **kwargs):
 
 
 def get_dag_gfn_env(
-    data,
+    artifact,
     prior_name,
     score_name,
+    seed=0,
     num_envs=1,
     prior_kwargs={},
     score_kwargs={},
+    **kwargs
 ):
+    api = wandb.Api()
+
+    # Get the artifact from Wandb
+    artifact = api.artifact(artifact)
+    artifact_dir = Path(artifact.download()) / f'{seed:02d}'
+
+    if seed not in artifact.metadata['seeds']:
+        raise ValueError(f'The seed `{seed}` is not in the list of seeds '
+            f'for artifact `{artifact}`: {artifact.metadata["seeds"]}')
+
+    train, valid, graph = load_artifact_continuous(artifact_dir)
+
     # Get the graph prior & marginal likelihood for reward computation
-    num_variables = data.shape[1]
+    num_variables = train.shape[1]
     graph_prior = get_graph_prior(prior_name, num_variables, **prior_kwargs)
-    marginal_likelihood = get_marginal_likelihood(score_name, data, **score_kwargs)
+    marginal_likelihood = get_marginal_likelihood(score_name, train, **score_kwargs)
     joint_model = JointModel(
         graph_prior=graph_prior,
         marginal_likelihood=marginal_likelihood
@@ -46,4 +65,11 @@ def get_dag_gfn_env(
     # Create the environment
     env = DAGEnvironment(num_envs=num_envs, joint_model=joint_model)
 
-    return env
+    infos = {
+        'metadata': artifact.metadata,
+        'train': train,
+        'valid': valid,
+        'graph': graph,
+    }
+
+    return (env, infos)

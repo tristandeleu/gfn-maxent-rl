@@ -1,0 +1,44 @@
+defaults:
+  - _self_
+  - env: "dag_gfn"
+  - algorithm: "db"
+
+replay:
+  _target_: "gfn_maxent_rl.data.ReplayBuffer"
+
+  # Capacity of the replay buffer
+  capacity: 100_000
+
+# Number of parallel environments
+num_envs: 8
+
+# Number of iterations with a random policy to prefill the replay buffer
+prefill: 1000
+
+exploration:
+  # Minimum value of epsilon-exploration
+  min_exploration: 0.1
+
+  # Proportion of training steps for warming up exploration
+  warmup_prop: 2
+
+# Learning rate
+lr: 1e-5
+
+# Batch size
+batch_size: 128
+
+# Number of iterations
+num_iterations: 100_000
+
+# Frequency of update for the target network (0 = no target network)
+update_target_every: 0
+
+# Random seed
+seed: 0
+
+# Frequency for logging
+log_every: 50
+
+# Name of the group for Wandb
+group_name: "default"

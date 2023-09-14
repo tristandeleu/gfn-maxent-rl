@@ -1,0 +1,13 @@
+# @package _global_
+
+algorithm:
+  _target_: "gfn_maxent_rl.algos.trajectory_balance.GFNTrajectoryBalance"
+
+  network:
+    _target_: "hydra.utils.get_method"
+    path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
+
+  update_target_every: 0
+
+replay:
+  _target_: "gfn_maxent_rl.data.EpisodicReplayBuffer"
