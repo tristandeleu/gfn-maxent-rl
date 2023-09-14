@@ -61,7 +61,7 @@ def batch_sequences_to_graphs_tuple(num_variables, actions, lengths):
 
     edges = np.ones((batch_size, max_edges_in_sequence), dtype=np.float32)
 
-    offsets, indices = np.tril_indices(max_length)
+    offsets, indices = np.tril_indices(max_length - 1)
     senders, receivers = divmod(actions[:, indices], num_variables)
 
     senders = np.where(offsets < lengths[:, None],

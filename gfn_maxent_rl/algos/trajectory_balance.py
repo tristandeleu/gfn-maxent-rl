@@ -17,10 +17,10 @@ class GFNTrajectoryBalance(GFNBaseAlgorithm):
     def loss(self, online_params, _, state, samples):
         # Get log P_F(. | G_t) for full trajectory
         v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0, 0))
-        log_pi = v_model(online_params.network, state, samples['graphs'], samples['masks'])
+        log_pi, _ = v_model(online_params.network, state, samples['graphs'], samples['masks'])
 
         # Mask the log-probabilities, based on the sequence lengths
-        seq_masks = (jnp.arange(log_pi.shape[1]) <= samples['lengths'])
+        seq_masks = (jnp.arange(log_pi.shape[1]) <= samples['lengths'][:, None])
         log_pi = jnp.where(seq_masks[..., None], log_pi, 0.)
 
         # Compute the forward log_probabilities
@@ -31,7 +31,7 @@ class GFNTrajectoryBalance(GFNBaseAlgorithm):
         log_pB = -jax.lax.lgamma(samples['lengths'] + 1.)  # -log(n!)
 
         # Compute the log-rewards, based on the delta-scores
-        log_rewards = jnp.where(seq_masks[..., None], samples['rewards'], 0.)
+        log_rewards = jnp.where(seq_masks, samples['rewards'], 0.)
         log_rewards = jnp.sum(log_rewards, axis=1)
 
         errors = online_params.log_Z + log_pF - log_rewards - log_pB
