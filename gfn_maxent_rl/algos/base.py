@@ -33,7 +33,6 @@ class BaseAlgorithm(ABC):
 
     @partial(jax.jit, static_argnums=(0,))
     def act(self, params, state, key, observations, epsilon):
-        batch_size = observations['mask'].shape[0]
         key, subkey1, subkey2 = jax.random.split(key, 3)
 
         # Get the policies
@@ -41,6 +40,7 @@ class BaseAlgorithm(ABC):
         log_uniform = uniform_log_policy(observations['mask'])  # Get uniform policy (exploration)
 
         # Mixture of the policies
+        batch_size = log_pi.shape[0]
         is_exploration = jax.random.bernoulli(subkey1, p=1. - epsilon, shape=(batch_size, 1))
         log_probs = jnp.where(is_exploration, log_uniform, log_pi)
 
@@ -102,7 +102,7 @@ class GFNBaseAlgorithm(BaseAlgorithm):
 
     def init(self, key, samples, normalization=1):
         # Initialize the network parameters (both online, and possibly target)
-        net_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
+        net_params, net_state = self.network.init(key, samples['observation'])
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
@@ -121,10 +121,5 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.network.apply(
-            params.network,
-            state,
-            observations['graph'],
-            observations['mask']
-        )
+        log_pi, _ = self.network.apply(params.network, state, observations)
         return log_pi
