@@ -23,10 +23,7 @@ def main(config):
     )
 
     # Create the replay buffer
-    replay = hydra.utils.instantiate(
-        config.replay,
-        num_variables=env.num_variables
-    )
+    replay = hydra.utils.instantiate(config.replay, env=env)
 
     # Create the algorithm
     algorithm = hydra.utils.instantiate(config.algorithm)

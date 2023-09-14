@@ -1,5 +1,6 @@
 import numpy as np
 import gym
+import math
 
 from gym.spaces import Dict, Box, Discrete
 
@@ -74,4 +75,38 @@ class DAGEnvironment(gym.vector.VectorEnv):
             'adjacency': self._state['adjacency'].astype(np.float32),
             'mask': 1. - np.asarray(self._state['adjacency'] + self._state['closure_T'], dtype=np.float32),
             'graph': to_graphs_tuple(self._state['adjacency'])
+        }
+
+    # Properties & methods to interact with the replay buffer
+
+    @property
+    def observation_dtype(self):
+        nbytes = math.ceil((self.num_variables ** 2) / 8)
+        return np.dtype([
+            ('adjacency', np.uint8, (nbytes,)),
+            ('mask', np.uint8, (nbytes,)),
+        ])
+
+    def encode(self, observations):
+        def _encode(decoded):
+            encoded = decoded.reshape(-1, self.num_variables ** 2)
+            return np.packbits(encoded.astype(np.int32), axis=1)
+
+        batch_size = observations['adjacency'].shape[0]
+        encoded = np.empty((batch_size,), dtype=self.observation_dtype)
+        encoded['adjacency'] = _encode(observations['adjacency'])
+        encoded['mask'] = _encode(observations['mask'])
+        return encoded
+
+    def decode(self, observations):
+        def _decode(encoded):
+            decoded = np.unpackbits(encoded, axis=-1, count=self.num_variables ** 2)
+            decoded = decoded.reshape(*encoded.shape[:-1], self.num_variables, self.num_variables)
+            return decoded.astype(np.float32)
+
+        adjacency = _decode(observations['adjacency'])
+        return {
+            'adjacency': adjacency,
+            'mask': _decode(observations['mask']),
+            'graph': to_graphs_tuple(adjacency)
         }
