@@ -4,7 +4,7 @@ import math
 
 from gym.spaces import Dict, Box, Discrete
 
-from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple
+from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequences_to_graphs_tuple
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -87,6 +87,10 @@ class DAGEnvironment(gym.vector.VectorEnv):
             ('mask', np.uint8, (nbytes,)),
         ])
 
+    @property
+    def max_length(self):
+        return (self.num_variables * (self.num_variables - 1) // 2) + 1
+
     def encode(self, observations):
         def _encode(decoded):
             encoded = decoded.reshape(-1, self.num_variables ** 2)
@@ -98,15 +102,23 @@ class DAGEnvironment(gym.vector.VectorEnv):
         encoded['mask'] = _encode(observations['mask'])
         return encoded
 
-    def decode(self, observations):
-        def _decode(encoded):
-            decoded = np.unpackbits(encoded, axis=-1, count=self.num_variables ** 2)
-            decoded = decoded.reshape(*encoded.shape[:-1], self.num_variables, self.num_variables)
-            return decoded.astype(np.float32)
+    def _decode(self, encoded):
+        decoded = np.unpackbits(encoded, axis=-1, count=self.num_variables ** 2)
+        decoded = decoded.reshape(*encoded.shape[:-1], self.num_variables, self.num_variables)
+        return decoded.astype(np.float32)
 
-        adjacency = _decode(observations['adjacency'])
+    def decode(self, observations):
+        adjacency = self._decode(observations['adjacency'])
         return {
             'adjacency': adjacency,
-            'mask': _decode(observations['mask']),
+            'mask': self._decode(observations['mask']),
             'graph': to_graphs_tuple(adjacency)
+        }
+
+    def decode_sequence(self, samples):
+        return {
+            'adjacency': self._decode(samples['observations']['adjacency']),
+            'mask': self._decode(samples['observations']['mask']),
+            'graph': batch_sequences_to_graphs_tuple(
+                self.num_variables, samples['actions'], samples['lengths'])
         }

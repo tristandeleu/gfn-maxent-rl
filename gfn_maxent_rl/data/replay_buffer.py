@@ -1,5 +1,4 @@
 import numpy as np
-import math
 
 from numpy.random import default_rng
 
