@@ -47,3 +47,11 @@ log_every: 50
 
 # Name of the group for Wandb
 group_name: "default"
+
+# Algorithm
+algorithm:
+  _target_: "gfn_maxent_rl.algos.detailed_balance.GFNDetailedBalance"
+  network:
+    _target_: "hydra.utils.get_method"
+    path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
+  update_target_every: 0

@@ -9,12 +9,9 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 from pathlib import Path
 
-from gfn_maxent_rl.envs.dag_gfn.policy import policy_network, q_network
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
 from gfn_maxent_rl.envs.dag_gfn.data_generation.data import load_artifact_continuous
 from gfn_maxent_rl.data import ReplayBuffer
-from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
-from gfn_maxent_rl.algos.soft_actor_critic import SAC
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -51,15 +48,7 @@ def main(config):
     )
 
     # Create the algorithm
-    # algorithm = GFNDetailedBalance(
-    #     network=policy_network,
-    #     update_target_every=config.update_target_every,
-    # )
-    algorithm = SAC(
-        actor_network=policy_network,
-        critic_network=q_network,
-        update_target_every=config.update_target_every,
-    )
+    algorithm = hydra.utils.instantiate(config.algorithm)
     algorithm.optimizer = optax.adam(config.lr)
     params, state = algorithm.init(key, replay.dummy_samples)
 
