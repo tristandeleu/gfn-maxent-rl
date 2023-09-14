@@ -9,9 +9,7 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 from pathlib import Path
 
-from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
 from gfn_maxent_rl.envs.dag_gfn.data_generation.data import load_artifact_continuous
-from gfn_maxent_rl.data import ReplayBuffer
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -34,17 +32,16 @@ def main(config):
     train, _, _ = load_artifact_continuous(artifact_dir)
 
     # Create the environment
-    env = get_dag_gfn_env(
+    env = hydra.utils.instantiate(
+        config.env,
         data=train,
-        prior_name=config.env.prior,
-        score_name=config.env.score,
-        num_envs=config.env.num_envs
+        num_envs=config.num_envs
     )
 
     # Create the replay buffer
-    replay = ReplayBuffer(
-        capacity=config.replay.capacity,
-        num_variables=env.num_variables,
+    replay = hydra.utils.instantiate(
+        config.replay,
+        num_variables=env.num_variables
     )
 
     # Create the algorithm
@@ -56,11 +53,11 @@ def main(config):
         init_value=jnp.array(0.),
         end_value=jnp.array(1. - config.exploration.min_exploration),
         transition_steps=config.num_iterations // config.exploration.warmup_prop,
-        transition_begin=config.replay.prefill,
+        transition_begin=config.prefill,
     ))
 
     observations, _ = env.reset()
-    with trange(config.replay.prefill + config.num_iterations) as pbar:
+    with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
             epsilon = exploration_schedule(iteration)
 
@@ -76,12 +73,12 @@ def main(config):
             replay.add(observations, actions, rewards, dones, next_observations)
             observations = next_observations
 
-            if (iteration >= config.replay.prefill) and replay.can_sample(config.batch_size):
+            if (iteration >= config.prefill) and replay.can_sample(config.batch_size):
                 # Sample from the replay buffer, and do one step of gradient
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
-                train_steps = iteration - config.replay.prefill
+                train_steps = iteration - config.prefill
                 # TODO: Logs in wandb
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
