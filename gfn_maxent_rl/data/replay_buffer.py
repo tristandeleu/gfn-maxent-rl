@@ -3,26 +3,17 @@ import math
 
 from numpy.random import default_rng
 
-from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple
-
 
 class ReplayBuffer:
-    def __init__(self, capacity, num_variables):
+    def __init__(self, capacity, env):
         self.capacity = capacity
-        self.num_variables = num_variables
+        self.env = env
 
-        nbytes = math.ceil((num_variables ** 2) / 8)
         dtype = np.dtype([
-            # State (adjacency & mask)
-            ('adjacency', np.uint8, (nbytes,)),
-            ('mask', np.uint8, (nbytes,)),
-            # Action
+            ('observation', env.observation_dtype),
             ('action', np.int_, (1,)),
-            # Reward
             ('reward', np.float_, (1,)),
-            # Next state (adjacency & mask)
-            ('next_adjacency', np.uint8, (nbytes,)),
-            ('next_mask', np.uint8, (nbytes,))
+            ('next_observation', env.observation_dtype)
         ])
         self._replay = np.zeros((capacity,), dtype=dtype)
         self._index = 0
@@ -37,18 +28,10 @@ class ReplayBuffer:
         self._is_full |= (self._index + num_samples >= self.capacity)
         self._index = (self._index + num_samples) % self.capacity
 
-        data = {
-            'adjacency': self.encode(observations['adjacency'][~dones]),
-            'mask': self.encode(observations['mask'][~dones]),
-            'action': actions[~dones],
-            'reward': rewards[~dones],
-            'next_adjacency': self.encode(next_observations['adjacency'][~dones]),
-            'next_mask': self.encode(next_observations['mask'][~dones])
-        }
-
-        for name in data:
-            shape = self._replay.dtype[name].shape
-            self._replay[name][add_idx] = np.asarray(data[name].reshape(-1, *shape))
+        self._replay['observation'][add_idx] = self.env.encode(observations)[~dones]
+        self._replay['action'][add_idx] = np.asarray(actions[~dones].reshape(-1, 1), dtype=np.int_)
+        self._replay['reward'][add_idx] = np.asarray(rewards[~dones].reshape(-1, 1), dtype=np.float_)
+        self._replay['next_observation'][add_idx] = self.env.encode(next_observations)[~dones]
 
         return None
 
@@ -56,44 +39,23 @@ class ReplayBuffer:
         indices = rng.choice(len(self), size=batch_size, replace=False)
         samples = self._replay[indices]
 
-        adjacency = self.decode(samples['adjacency'])
-        next_adjacency = self.decode(samples['next_adjacency'])
-
         return {
-            'observation': {
-                'adjacency': adjacency,
-                'graph': to_graphs_tuple(adjacency),
-                'mask': self.decode(samples['mask']),
-            },
+            'observation': self.env.decode(samples['observation']),
             'action': samples['action'],
             'reward': samples['reward'],
-            'next_observation': {
-                'adjacency': next_adjacency,
-                'graph': to_graphs_tuple(next_adjacency),
-                'mask': self.decode(samples['next_mask']),
-            },
+            'next_observation': self.env.decode(samples['next_observation']),
         }
 
     @property
     def dummy_samples(self):
-        shape = (1, self.num_variables, self.num_variables)
-        adjacency = np.zeros(shape, dtype=np.float32)
-        mask = np.zeros(shape, dtype=np.float32)
-        graph = to_graphs_tuple(adjacency, 1)
+        dummy_observation = np.zeros((1,), dtype=self.env.observation_dtype)
+        dummy_observation = self.env.decode(dummy_observation)
 
         return {
-            'observation': {
-                'adjacency': adjacency,
-                'graph': graph,
-                'mask': mask,
-            },
-            'action': np.array([[self.num_variables ** 2]]),
+            'observation': dummy_observation,
+            'action': np.zeros((1, 1), dtype=np.int_),
             'reward': np.zeros((1, 1), dtype=np.float_),
-            'next_observation': {
-                'adjacency': adjacency,
-                'graph': graph,
-                'mask': mask,
-            },
+            'next_observation': dummy_observation,
         }
 
     def __len__(self):
