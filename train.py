@@ -41,6 +41,7 @@ def main(config):
     ))
 
     observations, _ = env.reset()
+    indices = None
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
             epsilon = exploration_schedule(iteration)
@@ -54,7 +55,7 @@ def main(config):
             next_observations, rewards, dones, _, _ = env.step(actions)
 
             # Add the transitions to the replay buffer
-            replay.add(observations, actions, rewards, dones, next_observations)
+            indices = replay.add(observations, actions, rewards, dones, next_observations, indices=indices)
             observations = next_observations
 
             if (iteration >= config.prefill) and replay.can_sample(config.batch_size):
