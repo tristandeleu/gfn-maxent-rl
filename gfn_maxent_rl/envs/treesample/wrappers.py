@@ -22,7 +22,7 @@ class FixedOrderingWrapper(gym.Wrapper):
 
     def step(self, values):
         variables = self.env.permutation[self._index]
-        actions = np.vstack([variables, values]).T
+        actions = variables * self.env.num_categories + values
         self._index = (self._index + 1) % self.env.num_variables
         return super().step(actions)
 
@@ -37,11 +37,14 @@ class FixedOrderingWrapper(gym.Wrapper):
         return jnp.ones((batch_size,), dtype=jnp.int32)
 
     def action_mask(self, observations):
-        shape = (observations['mask'].shape[0], self.num_variables * self.num_categories)
+        shape = (
+            observations['mask'].shape[0],
+            self.env.num_variables * self.env.num_categories
+        )
         log_pi = jnp.zeros(shape, dtype=jnp.bool_)
         slice_ = slice(
-            self._index * self.num_categories,
-            (self._index + 1) * self.num_categories
+            self._index * self.env.num_categories,
+            (self._index + 1) * self.env.num_categories
         )
         log_pi = log_pi.at[:, slice_].set(True)
         return log_pi
