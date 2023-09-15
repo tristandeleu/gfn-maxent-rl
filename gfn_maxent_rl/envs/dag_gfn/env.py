@@ -5,7 +5,7 @@ import math
 from gym.spaces import Dict, Box, Discrete
 
 from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequences_to_graphs_tuple
-from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
+from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy, action_mask
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -132,3 +132,6 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     def num_parents(self, observations):
         return observations['graph'].n_edge[:-1]  # [:-1] -> Remove padding
+
+    def action_mask(self, observations):
+        return action_mask(observations['mask'])

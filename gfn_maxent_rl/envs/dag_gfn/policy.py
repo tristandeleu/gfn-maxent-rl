@@ -31,6 +31,13 @@ def uniform_log_policy(masks):
     return jnp.concatenate((logp_continue, logp_stop), axis=-1)
 
 
+def action_mask(masks):
+    masks_continue = masks.reshape(masks.shape[0], -1)
+    mask_stop = jnp.ones((masks.shape[0], 1), dtype=masks.dtype)
+
+    return jnp.concatenate((masks_continue, mask_stop), axis=-1, dtype=jnp.bool_)
+
+
 def policy_network(observations):
     batch_size = observations['mask'].shape[0]
     features = GNNBackbone(num_layers=1, name='gnn')(
