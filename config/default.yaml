@@ -31,9 +31,6 @@ batch_size: 128
 # Number of iterations
 num_iterations: 100_000
 
-# Frequency of update for the target network (0 = no target network)
-update_target_every: 0
-
 # Random seed
 seed: 0
 

@@ -13,10 +13,11 @@ AlgoState = namedtuple('AlgoState', ['optimizer', 'steps', 'network'])
 
 
 class BaseAlgorithm(ABC):
-    def __init__(self, env, update_target_every=0):
+    def __init__(self, env, target=None, target_kwargs={}):
         self._optimizer = None
         self.env = env
-        self.update_target_every = update_target_every
+        self.target = target
+        self.target_kwargs = target_kwargs
 
     @abstractmethod
     def loss(self, online_params, target_params, state, samples):
@@ -61,15 +62,23 @@ class BaseAlgorithm(ABC):
         online_params = optax.apply_updates(params.online, updates)
 
         # Update the target parameters
-        if self.update_target_every > 0:
+        if self.target == 'periodic':
             target_params = optax.periodic_update(
                 online_params,
                 params.target,
                 state.steps + 1,
-                self.update_target_every
+                **self.target_kwargs
             )
-        else:
+        elif self.target == 'incremental':
+            target_params = optax.incremental_update(
+                online_params,
+                params.target,
+                **self.target_kwargs
+            )
+        elif self.target is None:
             target_params = params.target
+        else:
+            raise ValueError(f'Unknown target: {self.target}')
 
         params = AlgoParameters(online=online_params, target=target_params)
         state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
@@ -89,14 +98,14 @@ class BaseAlgorithm(ABC):
 
     @property
     def use_target(self):
-        return self.update_target_every > 0
+        return self.target is not None
 
 
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
 class GFNBaseAlgorithm(BaseAlgorithm):
-    def __init__(self, env, network, update_target_every=0):
-        super().__init__(env, update_target_every=update_target_every)
+    def __init__(self, env, network, target=None, target_kwargs={}):
+        super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def init(self, key, samples, normalization=1):
