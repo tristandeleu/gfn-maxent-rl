@@ -1,6 +1,7 @@
 import jax.numpy as jnp
 import haiku as hk
 import optax
+import jax
 
 from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 
@@ -44,10 +45,6 @@ class SoftQLearningVanilla(BaseAlgorithm):
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
-        # # Set the normalization to the size of the dataset
-        # net_state['~']['normalization'] = jnp.full_like(
-        #     net_state['~']['normalization'], normalization)
-
         # Initialize the state
         state = AlgoState(
             optimizer=self.optimizer.init(online_params),
@@ -58,10 +55,20 @@ class SoftQLearningVanilla(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.network.apply(
+        q_values, _ = self.network.apply(
             params,
             state,
             observations['graph'],
             observations['mask']
         )
+
+        # Mask invalid actions
+        batch_size = observations['mask'].shape[0]
+        masks_continue = observations['mask'].reshape(batch_size, -1)
+        mask_stop = jnp.ones((batch_size, 1), dtype=masks_continue.dtype)
+        masks = jnp.concatenate((masks_continue, mask_stop), axis=-1)
+
+        logits = jnp.where(masks, q_values, -jnp.inf)
+        log_pi = jax.nn.log_softmax(logits, axis=-1)
+
         return log_pi
