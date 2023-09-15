@@ -124,7 +124,6 @@ class DAGEnvironment(gym.vector.VectorEnv):
                 self.num_variables, samples['actions'], samples['lengths'])
         }
 
-
     # Method to interact with the algorithm (uniform sampling of action)
 
     def uniform_log_policy(self, observations):
