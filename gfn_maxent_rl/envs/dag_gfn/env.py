@@ -50,7 +50,9 @@ class DAGEnvironment(gym.vector.VectorEnv):
         # Make sure that all the actions are valid
         is_invalid = np.logical_or(self._state['adjacency'], self._state['closure_T'])
         if np.any(is_invalid[~dones, sources, targets]):
-            raise ValueError('Some actions are invalid: either the edge to be '
+            # raise ValueError('Some actions are invalid: either the edge to be '
+            #     'added is already in the DAG, or adding this edge would lead to a cycle.')
+            print('Some actions are invalid: either the edge to be '
                 'added is already in the DAG, or adding this edge would lead to a cycle.')
 
         rewards = np.zeros((self.num_envs,), dtype=np.float32)
