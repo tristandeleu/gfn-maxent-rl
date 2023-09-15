@@ -18,7 +18,7 @@ class GFNDetailedBalance(GFNBaseAlgorithm):
         # Compute the (modified) detailed balance loss
         log_pF = jnp.take_along_axis(log_pi_t, samples['action'], axis=-1)
         log_pF = jnp.squeeze(log_pF, axis=-1)
-        log_pB = -jnp.log1p(samples['observation']['graph'].n_edge[:-1])  # [:-1] -> Remove padding
+        log_pB = -jnp.log(self.env.num_parents(samples['next_observation']))  # Uniform p_B
 
         # Recall that `samples['reward']` contains the delta-scores: log R(G') - log R(G)
         delta_scores = jnp.squeeze(samples['reward'], axis=1)
