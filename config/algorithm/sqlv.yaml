@@ -1,9 +1,16 @@
-_target_: "gfn_maxent_rl.algos.soft_qlearning_vanilla.SoftQLearningVanilla"
+# @package _global_
 
-network:
-  _target_: "hydra.utils.get_method"
-  path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+algorithm:
+  _target_: "gfn_maxent_rl.algos.soft_qlearning_vanilla.SoftQLearningVanilla"
 
-target: "periodic"
-target_kwargs:
-  update_period: 1000
+  network:
+    _target_: "hydra.utils.get_method"
+    path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+
+  target: "periodic"
+  target_kwargs:
+    update_period: 1000
+
+env_wrappers:
+  - _target_: "gfn_maxent_rl.envs.dag_gfn.wrappers.RewardCorrection"
+    alpha: 1.0

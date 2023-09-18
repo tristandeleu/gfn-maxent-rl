@@ -11,3 +11,7 @@ algorithm:
 
 replay:
   _target_: "gfn_maxent_rl.data.EpisodicReplayBuffer"
+
+env_wrappers:
+  - _target_: "gfn_maxent_rl.envs.dag_gfn.wrappers.RewardCorrection"
+    alpha: 1.0

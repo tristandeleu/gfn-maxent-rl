@@ -1,13 +1,20 @@
-_target_: "gfn_maxent_rl.algos.soft_actor_critic.SAC"
+# @package _global_
 
-actor_network:
-  _target_: "hydra.utils.get_method"
-  path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
+algorithm:
+  _target_: "gfn_maxent_rl.algos.soft_actor_critic.SAC"
 
-critic_network:
-  _target_: "hydra.utils.get_method"
-  path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+  actor_network:
+    _target_: "hydra.utils.get_method"
+    path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
 
-target: "incremental"
-target_kwargs:
-  step_size: 0.99
+  critic_network:
+    _target_: "hydra.utils.get_method"
+    path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+
+  target: "incremental"
+  target_kwargs:
+    step_size: 0.99
+
+env_wrappers:
+  - _target_: "gfn_maxent_rl.envs.dag_gfn.wrappers.RewardCorrection"
+    alpha: 1.0
