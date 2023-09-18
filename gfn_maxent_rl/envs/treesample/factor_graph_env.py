@@ -21,7 +21,6 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             assert potential.size == self.num_categories ** len(clique)
 
         self._state = np.full((num_envs, self.num_variables), -1, dtype=np.int_)
-        self._arange = np.arange(num_envs)
 
         observation_space = Dict({
             'variables': Box(
@@ -32,7 +31,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             ),
             'mask': MultiBinary(self.num_variables),
         })
-        action_space = Discrete(self.num_variables * self.num_categories)
+        action_space = Discrete(self.num_variables * self.num_categories + 1)
         super().__init__(num_envs, observation_space, action_space)
 
     def reset(self, *, seed=None, options=None):
@@ -40,17 +39,20 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         return (self.observations(), {})
 
     def step(self, actions):
-        # Clear complete episodes
-        is_complete = np.all(self._state != -1, axis=1)
-        self._state[is_complete] = -1
-
         indices, values = divmod(actions, self.num_categories)
+        dones = (indices == self.num_variables)
 
-        if np.any(self._state[self._arange, indices] != -1):
+        if np.any(self._state[dones] == -1):
+            raise RuntimeError('Invalid action: calling the stop action even '
+                'though some variables have not been assigned.')
+        
+        indices, values = indices[~dones], values[~dones]
+
+        if np.any(self._state[~dones, indices] != -1):
             raise RuntimeError('Invalid action: trying to set a variable '
                 'that has already been assigned.')
 
-        self._state[self._arange, indices] = values
+        self._state[~dones, indices] = values
 
         # Compute the rewards (more precisely, difference in log-rewards)
         rewards = np.zeros((self.num_envs,), dtype=np.float_)
@@ -58,7 +60,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         for clique, potential in self.potentials:
             # Check if the clique is active
             is_in_clique = np.any(clique == indices[:, None], axis=1)
-            assignments = self._state[:, clique]
+            assignments = self._state[:, clique][~dones]
             full_assignment = np.all(assignments != -1, axis=1)
             is_active = np.logical_and(is_in_clique, full_assignment)
 
@@ -69,8 +71,9 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             # Add the new potential
             rewards[is_active] += potential[codes]
 
-        dones = np.all(self._state != -1, axis=1)
         truncated = np.zeros((self.num_envs,), dtype=np.bool_)
+        self._state[dones] = -1  # Clear state for complete trajectories
+        rewards[dones] = 0.  # Terminal action has 0 reward
 
         return (self.observations(), rewards, dones, truncated, {})
 
