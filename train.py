@@ -4,6 +4,7 @@ import jax
 import optax
 import wandb
 import hydra
+import omegaconf
 
 from numpy.random import default_rng
 from tqdm.auto import trange
@@ -11,6 +12,16 @@ from tqdm.auto import trange
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
+    wandb.config = omegaconf.OmegaConf.to_container(
+        config, resolve=True, throw_on_missing=True
+    )
+    wandb.init(
+        project='gfn_maxent_rl',
+        group='test_loss',
+        settings=wandb.Settings(start_method='fork'),
+        mode=config.upload
+    )
+
     # Set the RNGs for reproducibility
     rng = default_rng(config.seed)
     key = jax.random.PRNGKey(config.seed)
@@ -69,6 +80,8 @@ def main(config):
                 # TODO: Logs in wandb
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
+                wandb.log({"total_loss": logs["loss"].item()})
+
 
 
 if __name__ == '__main__':
