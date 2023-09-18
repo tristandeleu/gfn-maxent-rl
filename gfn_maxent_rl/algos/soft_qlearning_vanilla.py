@@ -22,8 +22,8 @@ class SoftQLearningVanilla(BaseAlgorithm):
         params = target_params if self.use_target else online_params
         Q_tp1, _ = self.network.apply(
             params, state, samples['next_observation'])
-        Q_tp1 = jnp.where(action_masks, Q_tp1, 0.)
-        V_tp1 = Q_tp1.sum(axis=-1)
+        Q_tp1 = jnp.where(action_masks, Q_tp1, -jnp.inf)
+        V_tp1 = jax.nn.logsumexp(Q_tp1, axis=1)
 
         # Compute the (modified) detailed balance loss
         old_Q = jnp.take_along_axis(Q_t, samples['action'], axis=-1)
