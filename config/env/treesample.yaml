@@ -20,9 +20,9 @@ env_wrapper:
   alpha: 1.0
 
 policy_network:
-  _target_: "hydra.utils.get_method"
-  path: ""  # TODO
+  _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network"
+  num_categories: ${env.num_categories}
 
 value_network:
-  _target_: "hydra.utils.get_method"
-  path: ""  # TODO
+  _target_: "gfn_maxent_rl.envs.treesample.policy.q_network"
+  num_categories: ${env.num_categories}

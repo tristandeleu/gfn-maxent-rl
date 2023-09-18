@@ -94,7 +94,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
     @property
     def max_length(self):
-        return self.num_variables
+        return self.num_variables + 1
 
     def encode(self, observations):
         batch_size = observations['variables'].shape[0]
