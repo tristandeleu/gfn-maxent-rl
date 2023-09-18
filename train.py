@@ -20,12 +20,12 @@ def main(config):
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
+        rng=rng,
     )
 
-    # Add wrappers to the environment
-    if config.env_wrappers is not None:
-        for wrapper in config.env_wrappers:
-            env = hydra.utils.instantiate(wrapper, env=env)
+    # Add wrapper to the environment
+    if config.reward_correction:
+        env = hydra.utils.instantiate(config.env_wrapper, env=env)
 
     # Create the replay buffer
     replay = hydra.utils.instantiate(config.replay, env=env)

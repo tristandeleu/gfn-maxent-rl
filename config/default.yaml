@@ -40,5 +40,4 @@ log_every: 50
 # Name of the group for Wandb
 group_name: "default"
 
-# Environment wrapper
-env_wrappers: null
+reward_correction: false

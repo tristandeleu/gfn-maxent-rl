@@ -3,18 +3,12 @@
 algorithm:
   _target_: "gfn_maxent_rl.algos.soft_actor_critic.SAC"
 
-  actor_network:
-    _target_: "hydra.utils.get_method"
-    path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
+  actor_network: ${policy_network}
 
-  critic_network:
-    _target_: "hydra.utils.get_method"
-    path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+  critic_network: ${value_network}
 
   target: "incremental"
   target_kwargs:
     step_size: 0.99
 
-env_wrappers:
-  - _target_: "gfn_maxent_rl.envs.dag_gfn.wrappers.RewardCorrection"
-    alpha: 1.0
+reward_correction: true

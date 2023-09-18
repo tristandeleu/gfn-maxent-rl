@@ -3,9 +3,7 @@
 algorithm:
   _target_: "gfn_maxent_rl.algos.detailed_balance.GFNDetailedBalance"
 
-  network:
-    _target_: "hydra.utils.get_method"
-    path: "gfn_maxent_rl.envs.dag_gfn.policy.policy_network"
+  network: ${policy_network}
 
   target: "periodic"
   target_kwargs:

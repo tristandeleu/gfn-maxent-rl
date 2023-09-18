@@ -48,3 +48,25 @@ class FixedOrderingWrapper(gym.Wrapper):
         )
         log_pi = log_pi.at[:, slice_].set(True)
         return log_pi
+
+
+class RewardCorrection(gym.Wrapper):
+    def __init__(self, env, alpha=1.):
+        super().__init__(env)
+        self.alpha = alpha  # Temperature parameter
+        self._step = np.zeros((env.num_envs,), dtype=np.int_)
+
+    def reset(self, *, seed=None, options=None):
+        self._step[:] = 0
+        return super().reset(seed=seed, options=options)
+
+    def step(self, actions):
+        observations, rewards, terminated, truncated, infos = self.env.step(actions)
+
+        # Correct the reward by subtracting log(t + 1), where t is the number
+        # of edges in the current graph
+        correction = np.where(terminated | truncated, -np.log1p(self._step), 0.)
+        rewards = rewards + self.alpha * correction
+        self._step = (self._step + 1) % self.env.num_variables
+
+        return (observations, rewards, terminated, truncated, infos)

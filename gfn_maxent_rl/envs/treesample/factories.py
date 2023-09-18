@@ -1,5 +1,3 @@
-import warnings
-
 from numpy.random import default_rng
 
 from gfn_maxent_rl.envs.treesample.chain_env import chain_env
@@ -16,6 +14,7 @@ def get_treesample_env(
     num_envs=1,
     fixed_ordering=False,
     rng=default_rng(),
+    **kwargs
 ):
     factor_graphs = {
         'chain': (chain_env, {
@@ -51,4 +50,6 @@ def get_treesample_env(
     if fixed_ordering:
         env = FixedOrderingWrapper(env)
 
-    return env
+    infos = {'metadata': kwargs}
+
+    return (env, infos)
