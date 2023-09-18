@@ -11,21 +11,21 @@ class SoftQLearning(BaseAlgorithm):
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def loss(self, online_params, target_params, state, samples):
-        # Get Q(G_t, .) for the current graph
-        Q_t, _ = self.network.apply(
+        # Get log pi(. | G_t) for the current graph
+        log_pi_t, _ = self.network.apply(
             online_params, state, samples['observation'])
 
-        # Get Q(G_t+1, .) for the next graph
+        # Get log pi(. | G_t+1) for the next graph
         params = target_params if self.use_target else online_params
-        Q_tp1, _ = self.network.apply(
+        log_pi_tp1, _ = self.network.apply(
             params, state, samples['next_observation'])
 
         # Compute the (modified) detailed balance loss
-        old_Q = jnp.take_along_axis(Q_t, samples['action'], axis=-1)
-        old_Q = jnp.squeeze(old_Q, axis=-1)
+        old_log_pi = jnp.take_along_axis(log_pi_t, samples['action'], axis=-1)
+        old_log_pi = jnp.squeeze(old_log_pi, axis=-1)
 
         rewards = jnp.squeeze(samples['reward'], axis=1)
-        errors = (rewards + Q_t[:, -1] - Q_tp1[:, -1] - old_Q)
+        errors = (rewards + log_pi_t[:, -1] - log_pi_tp1[:, -1] - old_log_pi)
         loss = jnp.mean(optax.huber_loss(errors, delta=1.))  # TODO: Modify delta
 
         logs = {'errors': errors, 'loss': loss}
