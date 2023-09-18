@@ -7,16 +7,15 @@ from collections import namedtuple
 from abc import ABC, abstractmethod
 from functools import partial
 
-from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy
-
 
 AlgoParameters = namedtuple('AlgoParameters', ['online', 'target'])
 AlgoState = namedtuple('AlgoState', ['optimizer', 'steps', 'network'])
 
 
 class BaseAlgorithm(ABC):
-    def __init__(self, update_target_every=0):
+    def __init__(self, env, update_target_every=0):
         self._optimizer = None
+        self.env = env
         self.update_target_every = update_target_every
 
     @abstractmethod
@@ -33,14 +32,14 @@ class BaseAlgorithm(ABC):
 
     @partial(jax.jit, static_argnums=(0,))
     def act(self, params, state, key, observations, epsilon):
-        batch_size = observations['mask'].shape[0]
         key, subkey1, subkey2 = jax.random.split(key, 3)
 
         # Get the policies
         log_pi = self.log_policy(params, state, observations)  # Get the current policy
-        log_uniform = uniform_log_policy(observations['mask'])  # Get uniform policy (exploration)
+        log_uniform = self.env.uniform_log_policy(observations)  # Get uniform policy (exploration)
 
         # Mixture of the policies
+        batch_size = log_pi.shape[0]
         is_exploration = jax.random.bernoulli(subkey1, p=1. - epsilon, shape=(batch_size, 1))
         log_probs = jnp.where(is_exploration, log_uniform, log_pi)
 
@@ -96,13 +95,13 @@ class BaseAlgorithm(ABC):
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
 class GFNBaseAlgorithm(BaseAlgorithm):
-    def __init__(self, network, update_target_every=0):
-        super().__init__(update_target_every=update_target_every)
+    def __init__(self, env, network, update_target_every=0):
+        super().__init__(env, update_target_every=update_target_every)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def init(self, key, samples, normalization=1):
         # Initialize the network parameters (both online, and possibly target)
-        net_params, net_state = self.network.init(key, samples['graph'], samples['mask'])
+        net_params, net_state = self.network.init(key, samples['observation'])
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
@@ -121,10 +120,5 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.network.apply(
-            params.network,
-            state,
-            observations['graph'],
-            observations['mask']
-        )
+        log_pi, _ = self.network.apply(params.network, state, observations)
         return log_pi

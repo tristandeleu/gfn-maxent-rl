@@ -2,7 +2,9 @@ import numpy as np
 import gym
 import math
 
-from gym.spaces import Dict, Box, MultiDiscrete, MultiBinary
+from gym.spaces import Dict, Box, Discrete, MultiBinary
+
+from gfn_maxent_rl.envs.treesample.policy import uniform_log_policy, action_mask
 
 
 class FactorGraphEnvironment(gym.vector.VectorEnv):
@@ -30,7 +32,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             ),
             'mask': MultiBinary(self.num_variables),
         })
-        action_space = MultiDiscrete([self.num_variables, self.num_categories])
+        action_space = Discrete(self.num_variables * self.num_categories)
         super().__init__(num_envs, observation_space, action_space)
 
     def reset(self, *, seed=None, options=None):
@@ -42,7 +44,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         is_complete = np.all(self._state != -1, axis=1)
         self._state[is_complete] = -1
 
-        indices, values = actions.T
+        indices, values = divmod(actions, self.num_categories)
 
         if np.any(self._state[self._arange, indices] != -1):
             raise RuntimeError('Invalid action: trying to set a variable '
@@ -77,3 +79,43 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             'variables': np.copy(self._state),
             'mask': (self._state == -1).astype(np.int_)
         }
+
+    # Properties & methods to interact with the replay buffer
+
+    @property
+    def observation_dtype(self):
+        return np.dtype([
+            ('variables', np.int_, (self.num_variables,)),
+            ('mask', np.int_, (self.num_variables,))
+        ])
+
+    @property
+    def max_length(self):
+        return self.num_variables
+
+    def encode(self, observations):
+        batch_size = observations['variables'].shape[0]
+        encoded = np.empty((batch_size,), dtype=self.observation_dtype)
+        encoded['variables'] = observations['variables']
+        encoded['mask'] = observations['mask']
+        return encoded
+
+    def decode(self, observations):
+        return {
+            'variables': observations['variables'].astype(np.int32),
+            'mask': observations['mask'].astype(np.float32),
+        }
+
+    def decode_sequence(self, samples):
+        return self.decode(samples['observations'])
+
+    # Method to interact with the algorithm (uniform sampling of action)
+
+    def uniform_log_policy(self, observations):
+        return uniform_log_policy(observations['mask'], self.num_categories)
+
+    def num_parents(self, observations):
+        return (observations['variables'] != -1).sum(axis=-1)
+
+    def action_mask(self, observations):
+        return action_mask(observations['mask'], self.num_categories)

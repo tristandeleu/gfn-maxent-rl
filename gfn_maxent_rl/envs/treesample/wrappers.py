@@ -1,5 +1,7 @@
 import numpy as np
 import gym
+import jax.numpy as jnp
+import math
 
 from gym.spaces import MultiDiscrete
 
@@ -20,6 +22,29 @@ class FixedOrderingWrapper(gym.Wrapper):
 
     def step(self, values):
         variables = self.env.permutation[self._index]
-        actions = np.vstack([variables, values]).T
+        actions = variables * self.env.num_categories + values
         self._index = (self._index + 1) % self.env.num_variables
         return super().step(actions)
+
+    # Method to interact with the algorithm (uniform sampling of action)
+
+    def uniform_log_policy(self, observations):
+        masks = self.action_mask(observations)
+        return jnp.where(masks, -math.log(self.num_categories), -jnp.inf)
+
+    def num_parents(self, observations):
+        batch_size = observations.shape[0]
+        return jnp.ones((batch_size,), dtype=jnp.int32)
+
+    def action_mask(self, observations):
+        shape = (
+            observations['mask'].shape[0],
+            self.env.num_variables * self.env.num_categories
+        )
+        log_pi = jnp.zeros(shape, dtype=jnp.bool_)
+        slice_ = slice(
+            self._index * self.env.num_categories,
+            (self._index + 1) * self.env.num_categories
+        )
+        log_pi = log_pi.at[:, slice_].set(True)
+        return log_pi

@@ -11,38 +11,35 @@ from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 SACParameters = namedtuple('SACParameters', ['actor', 'critic1', 'critic2'])
 
 class SAC(BaseAlgorithm):
-    def __init__(self, actor_network, critic_network, update_target_every=0): # TODO change stuff in train.py
-        super().__init__(update_target_every=update_target_every)
+    def __init__(self, env, actor_network, critic_network, update_target_every=0):
+        super().__init__(env, update_target_every=update_target_every)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
 
     def loss(self, online_params, target_params, state, samples):
-        batch_size = samples['mask'].shape[0]
-        masks_continue = samples['mask'].reshape(batch_size, -1)
-        mask_stop = jnp.ones((batch_size, 1), dtype=masks_continue.dtype)
-        masks = jnp.concatenate((masks_continue, mask_stop), axis=-1)
+        action_masks = self.env.action_mask(samples['observation'])
 
         # actor network
         log_pi, _ = self.actor_network.apply(
-            online_params.actor, state.actor, samples['graph'], samples['mask'])
+            online_params.actor, state.actor, samples['observation'])
 
         # Get Q(G_t, .) for the current graph
         Q1_t, _ = self.critic_network.apply( 
-            online_params.critic1, state.critic1, samples['graph'], samples['mask'])
+            online_params.critic1, state.critic1, samples['observation'])
         Q2_t, _ = self.critic_network.apply(
-            online_params.critic2, state.critic2, samples['graph'], samples['mask'])
+            online_params.critic2, state.critic2, samples['observation'])
 
         # Get Q(G_t+1, .) for the next graph
         params = target_params if self.use_target else online_params
         Q1_tp1, _ = self.critic_network.apply(
-            params.critic1, state.critic1, samples['next_graph'], samples['next_mask'])
+            params.critic1, state.critic1, samples['next_observation'])
         Q2_tp1, _ = self.critic_network.apply(
-            params.critic2, state.critic2, samples['next_graph'], samples['next_mask'])
+            params.critic2, state.critic2, samples['next_observation'])
 
         # critic loss
         log_pi_nograd = jax.lax.stop_gradient(log_pi)
         min_Q_tp1 = jnp.exp(log_pi_nograd) * (jnp.minimum(Q1_tp1, Q2_tp1) - log_pi_nograd)
-        min_Q_tp1 = jnp.where(masks == 1., min_Q_tp1, 0.)
+        min_Q_tp1 = jnp.where(action_masks, min_Q_tp1, 0.)
         V_tp1 = min_Q_tp1.sum(axis=-1)
 
         # use Q-values only for the taken actions
@@ -63,7 +60,7 @@ class SAC(BaseAlgorithm):
         # actor loss
         min_Q_t = jax.lax.stop_gradient(jnp.minimum(Q1_t, Q2_t))
         actor_loss = jnp.exp(log_pi) * (log_pi - min_Q_t)
-        actor_loss = jnp.where(masks == 1., actor_loss, 0.)
+        actor_loss = jnp.where(action_masks, actor_loss, 0.)
         actor_loss = jnp.sum(actor_loss, axis=-1)
 
         loss = jnp.mean(critic_loss + actor_loss)
@@ -75,9 +72,9 @@ class SAC(BaseAlgorithm):
         subkey1, subkey2, subkey3 = jax.random.split(key, 3)
 
         # Initialize the network parameters (both online, and possibly target)
-        actor_params, actor_state = self.actor_network.init(subkey1, samples['graph'], samples['mask'])
-        critic1_params, critic1_state = self.critic_network.init(subkey2, samples['graph'], samples['mask'])
-        critic2_params, critic2_state = self.critic_network.init(subkey3, samples['graph'], samples['mask'])
+        actor_params, actor_state = self.actor_network.init(subkey1, samples['observation'])
+        critic1_params, critic1_state = self.critic_network.init(subkey2, samples['observation'])
+        critic2_params, critic2_state = self.critic_network.init(subkey3, samples['observation'])
         online_params = SACParameters(actor=actor_params, critic1=critic1_params, critic2=critic2_params)
 
         target_params = online_params if self.use_target else None
@@ -98,10 +95,5 @@ class SAC(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        log_pi, _ = self.actor_network.apply(
-            params.actor,
-            state.actor,
-            observations['graph'],
-            observations['mask']
-        )
+        log_pi, _ = self.actor_network.apply(params.actor, state.actor, observations)
         return log_pi

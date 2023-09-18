@@ -7,17 +7,17 @@ from gfn_maxent_rl.algos.base import GFNBaseAlgorithm
 
 
 class GFNTrajectoryBalance(GFNBaseAlgorithm):
-    def __init__(self, network, update_target_every=0):
+    def __init__(self, env, network, update_target_every=0):
         if update_target_every != 0:
             warnings.warn('No target network used in GFNTrajectoryBalance, but '
                 f'`update_target_every={update_target_every}`. Setting '
                 '`update_target_every=0`.')
-        super().__init__(network, update_target_every=0)
+        super().__init__(env, network, update_target_every=0)
 
     def loss(self, online_params, _, state, samples):
         # Get log P_F(. | G_t) for full trajectory
-        v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0, 0))
-        log_pi, _ = v_model(online_params.network, state, samples['graphs'], samples['masks'])
+        v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0))
+        log_pi, _ = v_model(online_params.network, state, samples['observations'])
 
         # Mask the log-probabilities, based on the sequence lengths
         seq_masks = (jnp.arange(log_pi.shape[1]) <= samples['lengths'][:, None])

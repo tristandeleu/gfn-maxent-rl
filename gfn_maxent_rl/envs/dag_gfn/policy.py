@@ -31,9 +31,17 @@ def uniform_log_policy(masks):
     return jnp.concatenate((logp_continue, logp_stop), axis=-1)
 
 
-def policy_network(graphs, masks):
-    batch_size = masks.shape[0]
-    features = GNNBackbone(num_layers=1, name='gnn')(graphs, masks)
+def action_mask(masks):
+    masks_continue = masks.reshape(masks.shape[0], -1)
+    mask_stop = jnp.ones((masks.shape[0], 1), dtype=masks.dtype)
+
+    return jnp.concatenate((masks_continue, mask_stop), axis=-1, dtype=jnp.bool_)
+
+
+def policy_network(observations):
+    batch_size = observations['mask'].shape[0]
+    features = GNNBackbone(num_layers=1, name='gnn')(
+        observations['graph'], observations['mask'])
 
     senders = hk.nets.MLP([128, 128], name='senders')(features.nodes)
     receivers = hk.nets.MLP([128, 128], name='receivers')(features.nodes)
@@ -43,12 +51,13 @@ def policy_network(graphs, masks):
     stop = hk.nets.MLP([128, 1], name='stop')(features.globals)
 
     norm = hk.get_state('normalization', (), init=jnp.ones)
-    return log_policy(logits * norm, stop * norm, masks)
+    return log_policy(logits * norm, stop * norm, observations['mask'])
 
 
-def q_network(graphs, masks):
-    batch_size = masks.shape[0]
-    features = GNNBackbone(num_layers=1, name='gnn')(graphs, masks)
+def q_network(observations):
+    batch_size = observations['mask'].shape[0]
+    features = GNNBackbone(num_layers=1, name='gnn')(
+        observations['graph'], observations['mask'])
 
     senders = hk.nets.MLP([128, 128], name='senders')(features.nodes)
     receivers = hk.nets.MLP([128, 128], name='receivers')(features.nodes)
