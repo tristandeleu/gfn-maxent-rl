@@ -9,4 +9,5 @@ critic_network:
   path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
 
 target: "incremental"
-step_size: 0.99
+target_kwargs:
+  step_size: 0.99
