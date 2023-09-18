@@ -8,4 +8,6 @@ critic_network:
   _target_: "hydra.utils.get_method"
   path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
 
-update_target_every: 0  # TODO
+target: "incremental"
+target_kwargs:
+  step_size: 0.99

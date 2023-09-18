@@ -6,8 +6,8 @@ from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 
 
 class SoftQLearning(BaseAlgorithm):
-    def __init__(self, env, network, update_target_every=0):
-        super().__init__(env, update_target_every=update_target_every)
+    def __init__(self, env, network, target=None, target_kwargs={}):
+        super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def loss(self, online_params, target_params, state, samples):
