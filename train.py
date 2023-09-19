@@ -17,7 +17,7 @@ def main(config):
     )
     wandb.init(
         project='gfn_maxent_rl',
-        group='test_loss',
+        group=config.group_name,
         settings=wandb.Settings(start_method='fork'),
         mode=config.upload
     )
@@ -80,7 +80,7 @@ def main(config):
                 # TODO: Logs in wandb
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({"total_loss": logs["loss"].item()})
+                wandb.log({"loss": logs["loss"].item()})
 
 
 
