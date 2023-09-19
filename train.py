@@ -5,9 +5,13 @@ import optax
 import wandb
 import hydra
 import omegaconf
+import networkx as nx
 
 from numpy.random import default_rng
 from tqdm.auto import trange
+
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
+from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -55,6 +59,10 @@ def main(config):
 
     observations, _ = env.reset()
     indices = None
+    _, infos = get_dag_gfn_env(artifact=config.env.artifact,
+                               prior_name=config.env.prior_name,
+                               score_name=config.env.score_name)
+    ground_truth = nx.to_numpy_array(infos['graph'], weight=None)
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
             epsilon = exploration_schedule(iteration)
@@ -76,11 +84,17 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
+                mean_pairwise_hamming_distance = mean_phd(samples['adjacency'])
+                mean_structural_hamming_distance = mean_shd(ground_truth, samples['adjacency'])
+
                 train_steps = iteration - config.prefill
-                # TODO: Logs in wandb
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({"loss": logs["loss"].item()})
+                wandb.log({
+                    "loss": logs["loss"].item(),
+                    "mean_pairwise_hamming_distance": mean_pairwise_hamming_distance,
+                    "mean_structural_hamming_distance": mean_structural_hamming_distance
+                })
 
 
 
