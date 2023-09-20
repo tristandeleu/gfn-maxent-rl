@@ -31,9 +31,9 @@ def push_source_flow_to_terminating_states(mdp_state_graph, cache):
         log_flow_incoming = mdp_state_graph.nodes[state]['log_flow']
         log_probs = cache[state]
 
-        for _, child, edge_attr in mdp_state_graph.edges(state, data=True):
+        for _, child, action in mdp_state_graph.edges(state, data='action'):
             # Get the log-probability of taking the action to get to "child"
-            log_prob_action = log_probs[edge_attr['action']]
+            log_prob_action = log_probs[action]
 
             # Update the log-flow of the child
             existing_log_flow_child = mdp_state_graph.nodes[child]['log_flow']
