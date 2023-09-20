@@ -43,4 +43,4 @@ group_name: "default"
 reward_correction: false
 
 # Upload the logs to Wandb, mode="disabled" or "online"
-upload: "online"
+upload: "disabled"

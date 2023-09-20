@@ -33,7 +33,15 @@ def main(config):
     key = jax.random.PRNGKey(config.seed)
 
     # Create the environment
+    # Train environment
     env, infos = hydra.utils.instantiate(
+        config.env,
+        num_envs=config.num_envs,
+        seed=config.seed,
+        rng=rng,
+    )
+    # Evaluation environment
+    env_valid, infos_valid = hydra.utils.instantiate(
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
@@ -46,6 +54,7 @@ def main(config):
     # Add wrapper to the environment
     if config.reward_correction:
         env = hydra.utils.instantiate(config.env_wrapper, env=env)
+        env_valid = hydra.utils.instantiate(config.env_wrapper, env=env_valid)
 
     # Create the replay buffer
     replay = hydra.utils.instantiate(config.replay, env=env)
@@ -67,6 +76,7 @@ def main(config):
     })
 
     observations, _ = env.reset()
+    observations_valid, _ = env_valid.reset()
     indices = None
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
@@ -85,6 +95,29 @@ def main(config):
             observations = next_observations
 
             if (iteration >= config.prefill) and replay.can_sample(config.batch_size):
+                returns_array = np.zeros((8))
+                dones_array = np.zeros((8))
+                # Evaluation samples
+                while dones_array.sum() < 100:
+                    # Sample actions from the model (w/o exploration)
+                    actions_valid, key, _ = algorithm.act(
+                        params.online, state.network, key, observations_valid, epsilon=1.)
+                    actions_valid = np.asarray(actions_valid)
+                    # Apply the actions in the evaluation environment
+                    _, rewards_valid, dones_valid, _, _ = env_valid.step(actions_valid)
+                    returns_array = np.vstack((returns_array, rewards_valid))
+                    dones_array = np.vstack((dones_array, 1 * dones_valid))
+                    import pdb; pdb.set_trace()
+
+                stop_dones_index = dones_array.shape[0] - np.argmax(dones_array[::-1], axis=0) - 1
+                dones_array_corrected = np.zeros_like(dones_array)
+                for column, row in enumerate(stop_dones_index):
+                    dones_array_corrected[:row+1, column] = 1
+                terminated_rewards = returns_array * dones_array_corrected
+                average_Return = terminated_rewards.sum() / dones_array.sum()
+
+
+
                 # Sample from the replay buffer, and do one step of gradient
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
@@ -110,6 +143,7 @@ def main(config):
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({
                     'loss': logs["loss"].item(),
+                    "average_Return": average_Return,
                     'step': train_steps
                 })
 
