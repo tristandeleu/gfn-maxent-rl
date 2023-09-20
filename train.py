@@ -83,12 +83,11 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
-                if 'graph' in infos:
-                    mean_pairwise_hamming_distance = mean_phd(samples['adjacency'])
-                    mean_structural_hamming_distance = mean_shd(ground_truth, samples['adjacency'])
+                if ('graph' in infos) and ('observation' in samples):
+                    adjacencies = samples['observation']['adjacency']
                     wandb.log({
-                        "mean_pairwise_hamming_distance": mean_pairwise_hamming_distance,
-                        "mean_structural_hamming_distance": mean_structural_hamming_distance
+                        "mean_pairwise_hamming_distance": mean_phd(adjacencies),
+                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies)
                     }, commit=False)
 
                 train_steps = iteration - config.prefill
