@@ -31,12 +31,15 @@ def main(config):
     key = jax.random.PRNGKey(config.seed)
 
     # Create the environment
-    env, _ = hydra.utils.instantiate(
+    env, infos = hydra.utils.instantiate(
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
         rng=rng,
     )
+
+    if 'graph' in infos:
+        ground_truth = nx.to_numpy_array(infos['graph'], weight=None)
 
     # Add wrapper to the environment
     if config.reward_correction:
@@ -59,10 +62,6 @@ def main(config):
 
     observations, _ = env.reset()
     indices = None
-    _, infos = get_dag_gfn_env(artifact=config.env.artifact,
-                               prior_name=config.env.prior_name,
-                               score_name=config.env.score_name)
-    ground_truth = nx.to_numpy_array(infos['graph'], weight=None)
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
             epsilon = exploration_schedule(iteration)
@@ -84,18 +83,18 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
-                mean_pairwise_hamming_distance = mean_phd(samples['adjacency'])
-                mean_structural_hamming_distance = mean_shd(ground_truth, samples['adjacency'])
+                if 'graph' in infos:
+                    mean_pairwise_hamming_distance = mean_phd(samples['adjacency'])
+                    mean_structural_hamming_distance = mean_shd(ground_truth, samples['adjacency'])
+                    wandb.log({
+                        "mean_pairwise_hamming_distance": mean_pairwise_hamming_distance,
+                        "mean_structural_hamming_distance": mean_structural_hamming_distance
+                    }, commit=False)
 
                 train_steps = iteration - config.prefill
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({
-                    "loss": logs["loss"].item(),
-                    "mean_pairwise_hamming_distance": mean_pairwise_hamming_distance,
-                    "mean_structural_hamming_distance": mean_structural_hamming_distance
-                })
-
+                wandb.log({"loss": logs["loss"].item()})
 
 
 if __name__ == '__main__':
