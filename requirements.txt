@@ -8,3 +8,4 @@ networkx==2.8.7
 tqdm
 wandb
 hydra-core
+omegaconf

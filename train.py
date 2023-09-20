@@ -5,9 +5,13 @@ import optax
 import wandb
 import hydra
 import omegaconf
+import networkx as nx
 
 from numpy.random import default_rng
 from tqdm.auto import trange
+
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
+from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -27,12 +31,15 @@ def main(config):
     key = jax.random.PRNGKey(config.seed)
 
     # Create the environment
-    env, _ = hydra.utils.instantiate(
+    env, infos = hydra.utils.instantiate(
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
         rng=rng,
     )
+
+    if 'graph' in infos:
+        ground_truth = nx.to_numpy_array(infos['graph'], weight=None)
 
     # Add wrapper to the environment
     if config.reward_correction:
@@ -76,12 +83,18 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
+                if 'graph' in infos:
+                    mean_pairwise_hamming_distance = mean_phd(samples['adjacency'])
+                    mean_structural_hamming_distance = mean_shd(ground_truth, samples['adjacency'])
+                    wandb.log({
+                        "mean_pairwise_hamming_distance": mean_pairwise_hamming_distance,
+                        "mean_structural_hamming_distance": mean_structural_hamming_distance
+                    }, commit=False)
+
                 train_steps = iteration - config.prefill
-                # TODO: Logs in wandb
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({"loss": logs["loss"].item()})
-
 
 
 if __name__ == '__main__':
