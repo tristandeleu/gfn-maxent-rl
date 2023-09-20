@@ -10,8 +10,8 @@ import networkx as nx
 from numpy.random import default_rng
 from tqdm.auto import trange
 
-from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
-from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, jensen_shannon_divergence
+from gfn_maxent_rl.utils.exhaustive import exact_log_posterior, model_log_posterior
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -61,6 +61,9 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
+    # Compute the target distribution
+    log_probs_target = exact_log_posterior(env, batch_size=config.batch_size)
+
     observations, _ = env.reset()
     indices = None
     with trange(config.prefill + config.num_iterations) as pbar:
@@ -84,6 +87,8 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
+                train_steps = iteration - config.prefill
+
                 if ('graph' in infos) and ('observation' in samples):
                     adjacencies = samples['observation']['adjacency']
                     wandb.log({
@@ -91,7 +96,14 @@ def main(config):
                         "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies)
                     }, commit=False)
 
-                train_steps = iteration - config.prefill
+                if train_steps % config.log_every == 0:
+                    # Compute the distribution induced by the model
+                    log_probs_model = model_log_posterior(
+                        env, algorithm, params.online, state.network, batch_size=config.batch_size)
+
+                    wandb.log({
+                        'metrics/jsd': jensen_shannon_divergence(log_probs_model, log_probs_target),
+                    }, commit=False)
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({"loss": logs["loss"].item()})

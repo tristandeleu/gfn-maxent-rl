@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def mean_phd(samples):
     '''
     samples: sample size adjacency matrices
@@ -32,5 +35,24 @@ def mean_shd(target, pred_samples):
     return structural_hamming_distance / len(pred_samples)
 
 
+def jensen_shannon_divergence(distribution1, distribution2):
+    assert isinstance(distribution1, dict)
+    assert isinstance(distribution2, dict)
 
+    graphs = sorted(list(distribution1.keys()), key=len)
 
+    # Get the two distributions aligned
+    log_probs1, log_probs2 = [], []
+    for graph in graphs:
+        log_probs1.append(distribution1[graph])
+        log_probs2.append(distribution2[graph])
+    log_probs1 = np.array(log_probs1, dtype=np.float_)
+    log_probs2 = np.array(log_probs2, dtype=np.float_)
+
+    # Compute the mean distribution
+    log_probs_mean = np.log(0.5) + np.logaddexp(log_probs1, log_probs2)
+
+    # Compute the JSD
+    kl1 = np.exp(log_probs1) * (log_probs1 - log_probs_mean)
+    kl2 = np.exp(log_probs2) * (log_probs2 - log_probs_mean)
+    return 0.5 * np.sum(kl1 + kl2)

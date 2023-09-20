@@ -86,7 +86,7 @@ def exact_log_posterior(env, batch_size=256):
         log_posterior.update(zip(keys, log_rewards))
 
     # Compute the log-partition function
-    log_rewards = np.asarray(log_posterior.values())
+    log_rewards = np.asarray(list(log_posterior.values()))
     log_Z = logsumexp(log_rewards)
 
     # Normalize the rewards
