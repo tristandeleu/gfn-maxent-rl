@@ -1,6 +1,7 @@
 import numpy as np
 import gym
 import math
+import networkx as nx
 
 from gym.spaces import Dict, Box, Discrete
 
@@ -28,6 +29,7 @@ class DAGEnvironment(gym.vector.VectorEnv):
         self._state = None
         self._all_dags_compressed = None
         self._all_dags_keys = None
+        self._state_graph = None
 
         shape = (self.num_variables, self.num_variables)
         observation_space = Dict({
@@ -169,3 +171,20 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     def log_reward(self, observations):
         return self.joint_model.log_prob(observations['adjacency'])
+
+    @property
+    def mdp_state_graph(self):
+        if self._state_graph is None:
+            edges = []
+            for keys, observations in self.all_states_batch_iterator(batch_size=512):
+                for key, mask in zip(keys, observations['mask']):
+                    for edge in zip(*np.nonzero(mask)):
+                        action = self.num_variables * edge[0] + edge[1]
+                        edges.append((key, key | {edge}, {'action': action}))
+
+            # Create the MDP (graph over states)
+            self._state_graph = nx.DiGraph(initial=frozenset())  # Identify initial state
+            self._state_graph.add_nodes_from(self._all_dags_keys, terminating=True)  # All the states are terminating
+            self._state_graph.add_edges_from(edges)
+
+        return self._state_graph
