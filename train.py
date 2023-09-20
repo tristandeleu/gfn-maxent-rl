@@ -11,7 +11,7 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, jensen_shannon_divergence
-from gfn_maxent_rl.utils.exhaustive import exact_log_posterior, model_log_posterior
+from gfn_maxent_rl.utils.exhaustive import exact_log_posterior, model_log_posterior, compute_cache
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -63,6 +63,7 @@ def main(config):
 
     # Compute the target distribution
     log_probs_target = exact_log_posterior(env, batch_size=config.batch_size)
+    log_policy = jax.jit(algorithm.log_policy)
 
     observations, _ = env.reset()
     indices = None
@@ -98,12 +99,14 @@ def main(config):
 
                 if train_steps % config.log_every == 0:
                     # Compute the distribution induced by the model
-                    log_probs_model = model_log_posterior(
-                        env, algorithm, params.online, state.network, batch_size=config.batch_size)
+                    cache = compute_cache(
+                        env, log_policy, params.online, state.network, batch_size=config.batch_size)
+                    # log_probs_model = model_log_posterior(
+                    #     env, algorithm, params.online, state.network, batch_size=config.batch_size)
 
-                    wandb.log({
-                        'metrics/jsd': jensen_shannon_divergence(log_probs_model, log_probs_target),
-                    }, commit=False)
+                    # wandb.log({
+                    #     'metrics/jsd': jensen_shannon_divergence(log_probs_model, log_probs_target),
+                    # }, commit=False)
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({"loss": logs["loss"].item()})

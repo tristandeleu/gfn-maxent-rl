@@ -6,8 +6,7 @@ from scipy.special import logsumexp
 from copy import deepcopy
 
 
-def get_cache(env, algorithm, params, state, batch_size=256):
-    log_policy = jax.jit(algorithm.log_policy)
+def compute_cache(env, log_policy, params, state, batch_size=256):
     cache = dict()
 
     for keys, observations in env.all_states_batch_iterator(batch_size=batch_size):
@@ -66,7 +65,7 @@ def push_source_flow_to_terminating_states(mdp_state_graph, cache):
 
 
 def model_log_posterior(env, algorithm, params, state, batch_size=256):
-    cache = get_cache(env, algorithm, params, state, batch_size=batch_size)
+    cache = compute_cache(env, algorithm, params, state, batch_size=batch_size)
     mdp_state_graph = push_source_flow_to_terminating_states(env.mdp_state_graph, cache)
 
     log_posterior = dict()
@@ -75,7 +74,6 @@ def model_log_posterior(env, algorithm, params, state, batch_size=256):
             log_posterior[state] = mdp_state_graph.nodes[state]['log_prob']
 
     return log_posterior
-
 
 
 def exact_log_posterior(env, batch_size=256):
