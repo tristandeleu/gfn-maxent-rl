@@ -10,8 +10,9 @@ import networkx as nx
 from numpy.random import default_rng
 from tqdm.auto import trange
 
-from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, jensen_shannon_divergence
-from gfn_maxent_rl.utils.exhaustive import exact_log_posterior, model_log_posterior, compute_cache
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
+from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
+from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -19,7 +20,7 @@ def main(config):
     wandb.config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    wandb.init(
+    run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
@@ -61,9 +62,9 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
-    # Compute the target distribution
-    log_probs_target = exact_log_posterior(env, batch_size=config.batch_size)
-    log_policy = jax.jit(algorithm.log_policy)
+    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target={
+        'log_probs': exact_log_posterior(env, batch_size=config.batch_size)
+    })
 
     observations, _ = env.reset()
     indices = None
@@ -98,18 +99,20 @@ def main(config):
                     }, commit=False)
 
                 if train_steps % config.log_every == 0:
-                    # Compute the distribution induced by the model
-                    cache = compute_cache(
-                        env, log_policy, params.online, state.network, batch_size=config.batch_size)
-                    # log_probs_model = model_log_posterior(
-                    #     env, algorithm, params.online, state.network, batch_size=config.batch_size)
-
-                    # wandb.log({
-                    #     'metrics/jsd': jensen_shannon_divergence(log_probs_model, log_probs_target),
-                    # }, commit=False)
+                    evaluator.enqueue(
+                        params.online,
+                        state.network,
+                        train_steps,
+                        batch_size=config.batch_size,
+                    )
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({"loss": logs["loss"].item()})
+                wandb.log({
+                    'loss': logs["loss"].item(),
+                    'step': train_steps
+                })
+
+    evaluator.join()
 
 
 if __name__ == '__main__':
