@@ -13,6 +13,7 @@ from tqdm.auto import trange
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
+from gfn_maxent_rl.utils.evaluations import evaluation
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -76,7 +77,6 @@ def main(config):
     })
 
     observations, _ = env.reset()
-    observations_valid, _ = env_valid.reset()
     indices = None
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
@@ -95,40 +95,19 @@ def main(config):
             observations = next_observations
 
             if (iteration >= config.prefill) and replay.can_sample(config.batch_size):
-                returns_array = np.zeros((8))
-                dones_array = np.zeros((8))
-                # Evaluation samples
-                while dones_array.sum() < 100:
-                    # Sample actions from the model (w/o exploration)
-                    actions_valid, key, _ = algorithm.act(
-                        params.online, state.network, key, observations_valid, epsilon=1.)
-                    actions_valid = np.asarray(actions_valid)
-                    # Apply the actions in the evaluation environment
-                    _, rewards_valid, dones_valid, _, _ = env_valid.step(actions_valid)
-                    returns_array = np.vstack((returns_array, rewards_valid))
-                    dones_array = np.vstack((dones_array, 1 * dones_valid))
-                    import pdb; pdb.set_trace()
-
-                stop_dones_index = dones_array.shape[0] - np.argmax(dones_array[::-1], axis=0) - 1
-                dones_array_corrected = np.zeros_like(dones_array)
-                for column, row in enumerate(stop_dones_index):
-                    dones_array_corrected[:row+1, column] = 1
-                terminated_rewards = returns_array * dones_array_corrected
-                average_Return = terminated_rewards.sum() / dones_array.sum()
-
-
-
                 # Sample from the replay buffer, and do one step of gradient
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
                 train_steps = iteration - config.prefill
 
-                if ('graph' in infos) and ('observation' in samples):
-                    adjacencies = samples['observation']['adjacency']
+                if ('graph' in infos) and ('observation' in samples) and (iteration % config.evaluation_every == 0):
+                    valid_returns, valid_adjacencies = evaluation(params.online, state.network, key,
+                                                                  algorithm, env_valid, config)
                     wandb.log({
-                        "mean_pairwise_hamming_distance": mean_phd(adjacencies),
-                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies),
+                        "mean_pairwise_hamming_distance": mean_phd(valid_adjacencies),
+                        "mean_structural_hamming_distance": mean_shd(ground_truth, valid_adjacencies),
+                        "average_Return": valid_returns,
                         'step': train_steps,
                     }, commit=False)
 
@@ -143,7 +122,6 @@ def main(config):
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({
                     'loss': logs["loss"].item(),
-                    "average_Return": average_Return,
                     'step': train_steps
                 })
 
