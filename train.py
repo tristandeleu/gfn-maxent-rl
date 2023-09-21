@@ -95,7 +95,8 @@ def main(config):
                     adjacencies = samples['observation']['adjacency']
                     wandb.log({
                         "mean_pairwise_hamming_distance": mean_phd(adjacencies),
-                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies)
+                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies),
+                        'step': train_steps,
                     }, commit=False)
 
                 if train_steps % config.log_every == 0:
