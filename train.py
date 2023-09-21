@@ -20,6 +20,7 @@ def main(config):
         config, resolve=True, throw_on_missing=True
     )
     wandb.init(
+        entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
         settings=wandb.Settings(start_method='fork'),
