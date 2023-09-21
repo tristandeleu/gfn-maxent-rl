@@ -1,11 +1,14 @@
 import numpy as np
 import gym
 import math
+import networkx as nx
 
 from gym.spaces import Dict, Box, Discrete
 
 from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequences_to_graphs_tuple
 from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy, action_mask
+from gfn_maxent_rl.envs.dag_gfn.utils.exhaustive import get_all_dags_compressed, get_all_dags_keys
+from gfn_maxent_rl.envs.dag_gfn.utils.graphs import compute_masks
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -24,6 +27,9 @@ class DAGEnvironment(gym.vector.VectorEnv):
         self.joint_model = joint_model
         self.num_variables = joint_model.num_variables
         self._state = None
+        self._all_dags_compressed = None
+        self._all_dags_keys = None
+        self._state_graph = None
 
         shape = (self.num_variables, self.num_variables)
         observation_space = Dict({
@@ -134,3 +140,51 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     def action_mask(self, observations):
         return action_mask(observations['mask'])
+
+    # Method for evaluation
+
+    def all_states_batch_iterator(self, batch_size):
+        if self._all_dags_compressed is None:
+            self._all_dags_compressed = get_all_dags_compressed(self.num_variables)
+            self._all_dags_keys = get_all_dags_keys(
+                self._all_dags_compressed, self.num_variables, batch_size=batch_size)
+
+        num_dags = self._all_dags_compressed.shape[0]
+        for index in range(0, num_dags, batch_size):
+            slice_ = slice(index, index + batch_size)
+            keys = self._all_dags_keys[slice_]
+
+            # Uncompress the adjacency matrices
+            compressed = self._all_dags_compressed[slice_]
+            adjacencies = np.unpackbits(compressed, axis=1, count=self.num_variables ** 2)
+            adjacencies = adjacencies.reshape(-1, self.num_variables, self.num_variables)
+
+            # Pack the observations
+            observations = {
+                'adjacency': adjacencies,
+                'mask': compute_masks(adjacencies),
+                'graph': to_graphs_tuple(adjacencies)
+            }
+
+            yield (keys, observations)
+
+
+    def log_reward(self, observations):
+        return self.joint_model.log_prob(observations['adjacency'])
+
+    @property
+    def mdp_state_graph(self):
+        if self._state_graph is None:
+            edges = []
+            for keys, observations in self.all_states_batch_iterator(batch_size=512):
+                for key, mask in zip(keys, observations['mask']):
+                    for edge in zip(*np.nonzero(mask)):
+                        action = self.num_variables * edge[0] + edge[1]
+                        edges.append((key, key | {edge}, {'action': action}))
+
+            # Create the MDP (graph over states)
+            self._state_graph = nx.DiGraph(initial=frozenset())  # Identify initial state
+            self._state_graph.add_nodes_from(self._all_dags_keys, terminating=True)  # All the states are terminating
+            self._state_graph.add_edges_from(edges)
+
+        return self._state_graph

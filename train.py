@@ -11,7 +11,8 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
-from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
+from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
+from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -19,7 +20,7 @@ def main(config):
     wandb.config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    wandb.init(
+    run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
@@ -61,6 +62,10 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
+    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target={
+        'log_probs': exact_log_posterior(env, batch_size=config.batch_size)
+    })
+
     observations, _ = env.reset()
     indices = None
     with trange(config.prefill + config.num_iterations) as pbar:
@@ -84,17 +89,31 @@ def main(config):
                 samples = replay.sample(batch_size=config.batch_size, rng=rng)
                 params, state, logs = algorithm.step(params, state, samples)
 
+                train_steps = iteration - config.prefill
+
                 if ('graph' in infos) and ('observation' in samples):
                     adjacencies = samples['observation']['adjacency']
                     wandb.log({
                         "mean_pairwise_hamming_distance": mean_phd(adjacencies),
-                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies)
+                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies),
+                        'step': train_steps,
                     }, commit=False)
 
-                train_steps = iteration - config.prefill
+                if train_steps % config.log_every == 0:
+                    evaluator.enqueue(
+                        params.online,
+                        state.network,
+                        train_steps,
+                        batch_size=config.batch_size,
+                    )
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({"loss": logs["loss"].item()})
+                wandb.log({
+                    'loss': logs["loss"].item(),
+                    'step': train_steps
+                })
+
+    evaluator.join()
 
 
 if __name__ == '__main__':
