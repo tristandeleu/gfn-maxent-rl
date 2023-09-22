@@ -13,6 +13,7 @@ from tqdm.auto import trange
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
+from gfn_maxent_rl.utils.evaluations import evaluation
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -33,7 +34,15 @@ def main(config):
     key = jax.random.PRNGKey(config.seed)
 
     # Create the environment
+    # Train environment
     env, infos = hydra.utils.instantiate(
+        config.env,
+        num_envs=config.num_envs,
+        seed=config.seed,
+        rng=rng,
+    )
+    # Evaluation environment
+    env_valid, infos_valid = hydra.utils.instantiate(
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
@@ -46,6 +55,7 @@ def main(config):
     # Add wrapper to the environment
     if config.reward_correction:
         env = hydra.utils.instantiate(config.env_wrapper, env=env)
+        env_valid = hydra.utils.instantiate(config.env_wrapper, env=env_valid)
 
     # Create the replay buffer
     replay = hydra.utils.instantiate(config.replay, env=env)
@@ -91,11 +101,13 @@ def main(config):
 
                 train_steps = iteration - config.prefill
 
-                if ('graph' in infos) and ('observation' in samples):
-                    adjacencies = samples['observation']['adjacency']
+                if ('graph' in infos) and ('observation' in samples) and (iteration % config.evaluation_every == 0):
+                    valid_returns, valid_adjacencies = evaluation(params.online, state.network, key,
+                                                                  algorithm, env_valid, config)
                     wandb.log({
-                        "mean_pairwise_hamming_distance": mean_phd(adjacencies),
-                        "mean_structural_hamming_distance": mean_shd(ground_truth, adjacencies),
+                        "mean_pairwise_hamming_distance": mean_phd(valid_adjacencies),
+                        "mean_structural_hamming_distance": mean_shd(ground_truth, valid_adjacencies),
+                        "average_Return": valid_returns,
                         'step': train_steps,
                     }, commit=False)
 
