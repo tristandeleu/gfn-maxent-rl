@@ -25,3 +25,5 @@ policy_network:
 value_network:
   _target_: "hydra.utils.get_method"
   path: "gfn_maxent_rl.envs.dag_gfn.policy.q_network"
+
+group_name_env: "dag_gfn"

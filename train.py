@@ -9,6 +9,7 @@ import networkx as nx
 
 from numpy.random import default_rng
 from tqdm.auto import trange
+import datetime
 
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
@@ -18,13 +19,17 @@ from gfn_maxent_rl.utils.evaluations import evaluation
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
+    # time = f"{datetime.datetime.now():%Y-%m-%d}"
     wandb.config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
+    config.group_name = config.group_name_algorithm + '_' + config.group_name_env
+    config.experiment_name = config.experiment_name + '_' + wandb.util.generate_id()
     run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
+        name=config.experiment_name,
         settings=wandb.Settings(start_method='fork'),
         mode=config.upload
     )

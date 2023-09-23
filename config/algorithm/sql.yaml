@@ -10,3 +10,5 @@ algorithm:
     update_period: 1000
 
 reward_correction: true
+
+group_name_algorithm: "sql"

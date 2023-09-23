@@ -12,3 +12,5 @@ algorithm:
     step_size: 0.99
 
 reward_correction: true
+
+group_name_algorithm: "sac"

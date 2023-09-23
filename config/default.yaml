@@ -45,8 +45,9 @@ evaluation_batch_size: 128
 
 # Name of the group for Wandb
 group_name: "default"
+experiment_name: "default"
 
 reward_correction: false
 
 # Upload the logs to Wandb, mode="disabled" or "online"
-upload: "online"
+upload: "disabled"

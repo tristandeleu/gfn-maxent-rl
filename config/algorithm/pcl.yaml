@@ -11,3 +11,5 @@ replay:
   _target_: "gfn_maxent_rl.data.EpisodicReplayBuffer"
 
 reward_correction: true
+
+group_name_algorithm: "pcl"

@@ -9,3 +9,5 @@ algorithm:
 
 replay:
   _target_: "gfn_maxent_rl.data.EpisodicReplayBuffer"
+
+group_name_algorithm: "tb"
