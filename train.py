@@ -20,7 +20,7 @@ from gfn_maxent_rl.utils.evaluations import evaluation
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
     # time = f"{datetime.datetime.now():%Y-%m-%d}"
-    wandb.config = omegaconf.OmegaConf.to_container(
+    wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
     config.group_name = config.group_name_algorithm + '_' + config.group_name_env
@@ -31,9 +31,10 @@ def main(config):
         group=config.group_name,
         name=config.experiment_name,
         settings=wandb.Settings(start_method='fork'),
-        mode=config.upload
+        mode=config.upload,
+        config=wandb_config
     )
-
+    
     # Set the RNGs for reproducibility
     rng = default_rng(config.seed)
     key = jax.random.PRNGKey(config.seed)

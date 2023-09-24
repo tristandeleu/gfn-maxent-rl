@@ -11,7 +11,7 @@ env:
   prior_kwargs: {}
 
   # Score to compute the log-marginal likelihood log P(D | G)
-  score_name: "zero"
+  score_name: "zero" # 'zero', 'lingauss', 'bge'
   score_kwargs: {}
 
 env_wrapper:
