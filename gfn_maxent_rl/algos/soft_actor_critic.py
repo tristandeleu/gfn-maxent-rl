@@ -62,7 +62,8 @@ class SAC(BaseAlgorithm):
 
         # actor loss
         min_Q_t = jax.lax.stop_gradient(jnp.minimum(Q1_t, Q2_t))
-        actor_loss = jnp.exp(log_pi_t) * (log_pi_t - min_Q_t)
+        pi_t = jnp.where(action_masks_t, jnp.exp(log_pi_t), 0.)
+        actor_loss = pi_t * (log_pi_t - min_Q_t)
         actor_loss = jnp.where(action_masks_t, actor_loss, 0.)
         actor_loss = jnp.sum(actor_loss, axis=-1)
 
