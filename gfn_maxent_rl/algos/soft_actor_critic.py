@@ -17,11 +17,14 @@ class SAC(BaseAlgorithm):
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
 
     def loss(self, online_params, target_params, state, samples):
-        action_masks = self.env.action_mask(samples['observation'])
+        action_masks_t = self.env.action_mask(samples['observation'])
+        action_masks_tp1 = self.env.action_mask(samples['next_observation'])
 
         # actor network
-        log_pi, _ = self.actor_network.apply(
+        log_pi_t, _ = self.actor_network.apply(
             online_params.actor, state.actor, samples['observation'])
+        log_pi_tp1, _ = self.actor_network.apply(
+            online_params.actor, state.actor, samples['next_observation'])
 
         # Get Q(G_t, .) for the current graph
         Q1_t, _ = self.critic_network.apply( 
@@ -37,9 +40,9 @@ class SAC(BaseAlgorithm):
             params.critic2, state.critic2, samples['next_observation'])
 
         # critic loss
-        log_pi_nograd = jax.lax.stop_gradient(log_pi)
-        min_Q_tp1 = jnp.exp(log_pi_nograd) * (jnp.minimum(Q1_tp1, Q2_tp1) - log_pi_nograd)
-        min_Q_tp1 = jnp.where(action_masks, min_Q_tp1, 0.)
+        log_pi_tp1 = jax.lax.stop_gradient(log_pi_tp1)
+        min_Q_tp1 = jnp.exp(log_pi_tp1) * (jnp.minimum(Q1_tp1, Q2_tp1) - log_pi_tp1)
+        min_Q_tp1 = jnp.where(action_masks_tp1, min_Q_tp1, 0.)
         V_tp1 = min_Q_tp1.sum(axis=-1)
 
         # use Q-values only for the taken actions
@@ -59,8 +62,9 @@ class SAC(BaseAlgorithm):
 
         # actor loss
         min_Q_t = jax.lax.stop_gradient(jnp.minimum(Q1_t, Q2_t))
-        actor_loss = jnp.exp(log_pi) * (log_pi - min_Q_t)
-        actor_loss = jnp.where(action_masks, actor_loss, 0.)
+        pi_t = jnp.where(action_masks_t, jnp.exp(log_pi_t), 0.)
+        actor_loss = pi_t * (log_pi_t - min_Q_t)
+        actor_loss = jnp.where(action_masks_t, actor_loss, 0.)
         actor_loss = jnp.sum(actor_loss, axis=-1)
 
         loss = jnp.mean(critic_loss + actor_loss)

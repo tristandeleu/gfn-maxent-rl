@@ -9,7 +9,7 @@ algorithm:
 
   target: "incremental"
   target_kwargs:
-    step_size: 0.99
+    step_size: 0.005
 
 reward_correction: true
 
