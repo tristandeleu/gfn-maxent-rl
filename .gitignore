@@ -165,3 +165,4 @@ slurm*
 wandb/
 artifacts/
 outputs/
+run.sh

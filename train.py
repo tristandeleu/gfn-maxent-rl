@@ -23,7 +23,6 @@ def main(config):
     wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    config.group_name = config.group_name_algorithm + '_' + config.group_name_env
     config.experiment_name = config.experiment_name + '_' + wandb.util.generate_id()
     run = wandb.init(
         entity='tristandeleu_mila_01',
