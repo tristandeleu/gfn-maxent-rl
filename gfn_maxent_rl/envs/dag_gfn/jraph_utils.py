@@ -65,9 +65,9 @@ def batch_sequences_to_graphs_tuple(num_variables, actions, lengths):
     senders, receivers = divmod(actions[:, indices], num_variables)
 
     senders = np.where(offsets < lengths[:, None],
-        senders + offsets * num_variables, max_length * num_variables)
+        senders + (offsets + 1) * num_variables, max_length * num_variables)
     receivers = np.where(offsets < lengths[:, None],
-        receivers + offsets * num_variables, max_length * num_variables)
+        receivers + (offsets + 1) * num_variables, max_length * num_variables)
 
     globals = np.ones((batch_size, max_length + 1), dtype=np.float32)
 
