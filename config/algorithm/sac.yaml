@@ -13,4 +13,25 @@ algorithm:
 
 reward_correction: true
 
+actor_lr: 1e-4
+
+critic_lr: 1e-3
+
+optimizer:
+  _target_: "optax.multi_transform"
+
+  transforms:
+    actor:
+      _target_: "optax.adam"
+      learning_rate: ${actor_lr}
+    critic:
+      _target_: "optax.adam"
+      learning_rate: ${critic_lr}
+
+  param_labels:
+    _target_: "gfn_maxent_rl.algos.soft_actor_critic.SACParameters"
+    actor: "actor"
+    critic1: "critic"
+    critic2: "critic"
+
 group_name_algorithm: "sac"
