@@ -12,7 +12,7 @@ class SoftQLearningVanilla(BaseAlgorithm):
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def loss(self, online_params, target_params, state, samples):
-        action_masks = self.env.action_mask(samples['observation'])
+        action_masks = self.env.action_mask(samples['next_observation'])
 
         # Get Q(G_t, .) for the current graph
         Q_t, _ = self.network.apply(
