@@ -34,4 +34,4 @@ optimizer:
     critic1: "critic"
     critic2: "critic"
 
-group_name_algorithm: "sac"
+exp_name_algorithm: "sac"

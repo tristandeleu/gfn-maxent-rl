@@ -27,4 +27,4 @@ value_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.q_network"
   num_categories: ${env.num_categories}
 
-group_name_env: "treesample"
+exp_name_env: "treesample"

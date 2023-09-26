@@ -10,4 +10,24 @@ algorithm:
 replay:
   _target_: "gfn_maxent_rl.data.EpisodicReplayBuffer"
 
-group_name_algorithm: "tb"
+policy_lr: 1e-4
+
+z_lr: 1e-2
+
+optimizer:
+  _target_: "optax.multi_transform"
+
+  transforms:
+    network:
+      _target_: "optax.adam"
+      learning_rate: ${policy_lr}
+    log_Z:
+      _target_: "optax.adam"
+      learning_rate: ${z_lr}
+
+  param_labels:
+    _target_: "gfn_maxent_rl.algos.base.GFNParameters"
+    network: "network"
+    log_Z: "log_Z"
+
+exp_name_algorithm: "tb"

@@ -11,4 +11,4 @@ algorithm:
 
 reward_correction: true
 
-group_name_algorithm: "sqlv"
+exp_name_algorithm: "sqlv"

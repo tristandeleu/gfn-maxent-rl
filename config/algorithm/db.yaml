@@ -9,4 +9,4 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
-group_name_algorithm: "db"
+exp_name_algorithm: "db"
