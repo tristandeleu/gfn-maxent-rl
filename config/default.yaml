@@ -23,6 +23,7 @@ exploration:
   warmup_prop: 2
 
 # Learning rate
+#lr: 1e-4
 lr: 1e-4
 
 # Optimizer
