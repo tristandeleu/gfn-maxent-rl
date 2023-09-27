@@ -11,4 +11,4 @@ algorithm:
 
 reward_correction: true
 
-group_name_algorithm: "sql"
+exp_name_algorithm: "sql"

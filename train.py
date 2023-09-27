@@ -9,7 +9,6 @@ import networkx as nx
 
 from numpy.random import default_rng
 from tqdm.auto import trange
-import datetime
 
 from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
@@ -19,7 +18,6 @@ from gfn_maxent_rl.utils.evaluations import evaluation
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
-    # time = f"{datetime.datetime.now():%Y-%m-%d}"
     wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
