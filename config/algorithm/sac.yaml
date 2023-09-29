@@ -7,15 +7,16 @@ algorithm:
 
   critic_network: ${value_network}
 
-  target: "incremental"
+  target: "periodic" # "incremental"
   target_kwargs:
-    step_size: 0.005
+    update_period: 1000
+    #step_size: 0.005
 
 reward_correction: true
 
 actor_lr: 1e-4
 
-critic_lr: 1e-3
+critic_lr: 1e-2
 
 optimizer:
   _target_: "optax.multi_transform"

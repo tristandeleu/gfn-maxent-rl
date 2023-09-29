@@ -24,7 +24,7 @@ def main(config):
         config, resolve=True, throw_on_missing=True
     )
     config.experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' +\
-                             config.env.score_name + '_' + time + '_' + 'plr4_zlr2'
+                             config.env.score_name + '_' + time
     run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
@@ -107,7 +107,7 @@ def main(config):
 
                 train_steps = iteration - config.prefill
 
-                if ('graph' in infos) and ('observation' in samples) and (iteration % config.evaluation_every == 0):
+                if ('graph' in infos) and (iteration % config.evaluation_every == 0):
                     valid_returns, valid_adjacencies = evaluation(params.online, state.network, key,
                                                                   algorithm, env_valid, config)
                     wandb.log({
