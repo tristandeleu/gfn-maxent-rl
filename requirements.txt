@@ -1,10 +1,10 @@
-chex==0.1.5
-optax==0.1.4
-jraph==0.0.6.dev0
+chex
+optax
+jraph
 gym>=0.22.0
 pandas
-dm-haiku==0.0.9
-networkx==2.8.7
+dm-haiku
+networkx
 tqdm
 wandb
 hydra-core
