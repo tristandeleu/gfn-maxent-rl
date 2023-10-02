@@ -23,19 +23,7 @@ exploration:
   warmup_prop: 2
 
 # Learning rate
-#lr: 1e-4
 lr: 1e-4
-
-# Optimizer
-optimizer:
-  _target_: "optax.multi_transform"
-
-  transforms:
-    network:
-      _target_: "optax.adam"
-      learning_rate: ${lr}
-
-  param_labels: "network"
 
 # Batch size
 batch_size: 128

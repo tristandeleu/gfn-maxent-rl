@@ -11,4 +11,8 @@ algorithm:
 
 reward_correction: true
 
+optimizer:
+  _target_: "optax.adam"
+  learning_rate: ${lr}
+
 exp_name_algorithm: "sqlv"
