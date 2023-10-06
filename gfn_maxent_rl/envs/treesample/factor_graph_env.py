@@ -1,8 +1,10 @@
 import numpy as np
 import gym
 import math
+import networkx as nx
 
 from gym.spaces import Dict, Box, Discrete, MultiBinary
+from itertools import product, chain
 
 from gfn_maxent_rl.envs.treesample.policy import uniform_log_policy, action_mask
 
@@ -122,3 +124,71 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
     def action_mask(self, observations):
         return action_mask(observations['mask'], self.num_categories)
+
+    # Method for evaluation
+
+    def all_states_batch_iterator(self, batch_size):
+        num_terminating_states = self.num_categories ** self.num_variables
+
+        if self._all_terminating_states is None:
+            iterator = product(range(self.num_categories), repeat=self.num_variables)
+            self._all_terminating_keys = list(iterator)
+            self._all_terminating_states = np.fromiter(
+                chain(*self._all_terminating_keys),
+                dtype=np.int_,
+                count=num_terminating_states * self.num_variables,
+            ).reshape(-1, self.num_variables)
+
+        for index in range(0, num_terminating_states, batch_size):
+            slice_ = slice(index, index + batch_size)
+            keys = self._all_terminating_keys[slice_]
+
+            variables = self._all_terminating_states[slice_]
+            observations = {
+                'variables': variables.astype(np.int32),
+                'mask': np.zeros_like(variables, dtype=np.float32),
+            }
+
+            yield (keys, observations)
+
+    def log_reward(self, observations):
+        variables = observations['variables']
+        log_rewards = np.zeros((variables.shape[0],), dtype=np.float_)
+
+        for clique, potential in self.potentials:
+            assignments = variables[:, clique]
+
+            # Get the codes for the assignments
+            base = self.num_categories ** np.arange(len(clique))
+            codes = np.sum(assignments * base, axis=1)
+
+            # Add the new potential
+            log_rewards += potential[codes]
+
+        return log_rewards
+
+    @property
+    def mdp_state_graph(self):
+        if self._state_graph is None:
+            states = list(product(range(-1, self.num_categories), repeat=self.num_variables))
+            terminating_states = product(range(self.num_categories), repeat=self.num_variables)
+
+            edges = []
+            for state in states:
+                for i, variable in enumerate(state):
+                    if variable == -1:
+                        edges.extend([
+                            (state, state[:i] + (value,) + state[i+1:])
+                            for value in range(self.num_categories)
+                        ])
+
+            # Create the MDP (graph over states)
+            self._state_graph = nx.DiGraph(initial=(-1,) * self.num_variables)
+            self._state_graph.add_nodes_from(states, terminating=False)
+            nx.set_node_attributes(
+                self._state_graph,
+                {state: {'terminating': True} for state in terminating_states}
+            )
+            self._state_graph.add_edges_from(edges)
+
+        return self._state_graph
