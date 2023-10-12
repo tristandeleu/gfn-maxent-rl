@@ -7,10 +7,10 @@ algorithm:
 
   critic_network: ${value_network}
 
-  target: "periodic" # "incremental"
+  target: "incremental" #"periodic"
   target_kwargs:
-    update_period: 1000
-    #step_size: 0.005
+#    update_period: 1000
+    step_size: 0.005
 
 reward_correction: true
 
