@@ -149,14 +149,25 @@ class SAC(BaseAlgorithm):
         online_params = SACParameters(actor=params_actor, critic=params_critic)
         opt_state = SACParameters(actor=opt_state_actor, critic=opt_state_critic)
 
-        # Update the target parameters
+
         if self.target == 'periodic':
             target_params = optax.periodic_update(
-                online_params,
+                jax.tree_util.tree_map(
+                    lambda new, old: 0.005 * new + (1.0 - 0.005) * old,
+                    online_params, params.target),
                 params.target,
                 state.steps + 1,
                 **self.target_kwargs
             )
+
+        # # Update the target parameters
+        # if self.target == 'periodic':
+        #     target_params = optax.periodic_update(
+        #         online_params,
+        #         params.target,
+        #         state.steps + 1,
+        #         **self.target_kwargs
+        #     )
         elif self.target == 'incremental':
             target_params = optax.incremental_update(
                 online_params,
