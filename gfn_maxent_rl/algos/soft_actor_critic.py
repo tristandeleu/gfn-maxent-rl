@@ -40,7 +40,8 @@ class SAC(BaseAlgorithm):
         actor_loss = jnp.sum(actor_loss, axis=-1)
 
         loss = jnp.mean(actor_loss)
-        logs = {'actor_loss': actor_loss}
+        # logs = {'actor_loss': actor_loss}
+        logs = {}
         return (loss, logs)
 
     def critic_loss(self, critic_online_params, actor_online_params, target_params, state, samples):
@@ -129,19 +130,16 @@ class SAC(BaseAlgorithm):
         log_pi, _ = self.actor_network.apply(params.actor, state.actor, observations)
         return log_pi
 
-    def periodic_update_td3(self, params, params_critic, state, samples, logs, num_updates=1):
-        params_actor = params.online.actor
+    def periodic_update_td3(self, params_actor, params_critic, state, samples, num_updates=1):
         for _ in range(num_updates):
             (actor_loss, logs_actor), grads_actor = jax.value_and_grad(self.actor_loss, has_aux=True)(
                 params_actor, params_critic, state.network, samples)  # Use the updated critic parameters
 
             updates_actor, opt_state_actor = self.optimizer.actor.update(
-                grads_actor, state.optimizer.actor, params.online.actor)
-            params_actor = optax.apply_updates(params.online.actor, updates_actor)
+                grads_actor, state.optimizer.actor, params_actor)
+            params_actor = optax.apply_updates(params_actor, updates_actor)
 
-        logs.update(logs_actor)
-        logs['loss'] += actor_loss
-        return params_actor, opt_state_actor, logs
+        return params_actor, opt_state_actor, actor_loss, logs_actor
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self, params, state, samples):
@@ -153,12 +151,16 @@ class SAC(BaseAlgorithm):
             grads_critic, state.optimizer.critic, params.online.critic)
         params_critic = optax.apply_updates(params.online.critic, updates_critic)
 
-        logs['loss'] = critic_loss
-
         # Update the parameters of the actor with TD3 support
-        params_actor, opt_state_actor, logs = optax.periodic_update(
-            self.periodic_update_td3(params, params_critic, state, samples, logs, num_updates=self.policy_frequency),
-            (params.online.actor, state.optimizer.actor, logs),
+        params_actor, opt_state_actor, actor_loss, logs_actor = optax.periodic_update(
+            self.periodic_update_td3(
+                params.online.actor,
+                params_critic,
+                state,
+                samples,
+                num_updates=self.policy_frequency
+            ),
+            (params.online.actor, state.optimizer.actor, 0., {}),
             state.steps + 1,
             self.policy_frequency
         )
@@ -193,6 +195,6 @@ class SAC(BaseAlgorithm):
         state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
 
         # Update the logs
-        # logs.update(logs_actor)
-        # logs['loss'] = actor_loss + critic_loss
+        logs.update(logs_actor)
+        logs['loss'] = actor_loss + critic_loss
         return (params, state, logs)
