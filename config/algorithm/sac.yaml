@@ -12,6 +12,8 @@ algorithm:
     update_period: 5 #1000
 #    step_size: 0.005
 
+  policy_frequency: 5
+
 reward_correction: true
 
 actor_lr: 3e-4 # 1e-4

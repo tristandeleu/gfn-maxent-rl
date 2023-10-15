@@ -11,10 +11,11 @@ from functools import partial
 SACParameters = namedtuple('SACParameters', ['actor', 'critic'])
 
 class SAC(BaseAlgorithm):
-    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}):
+    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
+        self.policy_frequency = policy_frequency
 
     def _apply_critic(self, params, state, observations):
         Q1, _ = self.critic_network.apply(params[0], state[0], observations)
@@ -155,10 +156,10 @@ class SAC(BaseAlgorithm):
 
         # Update the parameters of the actor with TD3 support
         params_actor, opt_state_actor, logs = optax.periodic_update(
-            self.periodic_update_td3(params, params_critic, state, samples, logs, num_updates=5),
+            self.periodic_update_td3(params, params_critic, state, samples, logs, num_updates=self.policy_frequency),
             (params.online.actor, state.optimizer.actor, logs),
-            state.steps,
-            5
+            state.steps + 1,
+            self.policy_frequency
         )
 
         # Pack the parameters & optimizer state
