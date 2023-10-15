@@ -11,11 +11,12 @@ from functools import partial
 SACParameters = namedtuple('SACParameters', ['actor', 'critic'])
 
 class SAC(BaseAlgorithm):
-    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1):
+    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1, tau=0.005):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
         self.policy_frequency = policy_frequency
+        self.tau = tau
 
     def _apply_critic(self, params, state, observations):
         Q1, _ = self.critic_network.apply(params[0], state[0], observations)
@@ -170,7 +171,7 @@ class SAC(BaseAlgorithm):
         if self.target == 'periodic':
             target_params = optax.periodic_update(
                 jax.tree_util.tree_map(
-                    lambda new, old: 0.005 * new + (1.0 - 0.005) * old,
+                    lambda new, old: self.tau * new + (1.0 - self.tau) * old,
                     online_params, params.target),
                 params.target,
                 state.steps + 1,
