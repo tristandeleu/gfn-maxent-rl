@@ -94,7 +94,11 @@ class BaseAlgorithm(ABC):
 
     @optimizer.setter
     def optimizer(self, value):
-        self._optimizer = optax.chain(value, optax.zero_nans())
+        self._optimizer = jax.tree_util.tree_map(
+            lambda opt: optax.chain(opt, optax.zero_nans()),
+            value,
+            is_leaf=lambda opt: isinstance(opt, optax.GradientTransformation)
+        )
 
     @property
     def use_target(self):

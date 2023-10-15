@@ -9,4 +9,8 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
+optimizer:
+  _target_: "optax.adam"
+  learning_rate: ${lr}
+
 exp_name_algorithm: "db"

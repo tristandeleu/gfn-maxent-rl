@@ -7,31 +7,30 @@ algorithm:
 
   critic_network: ${value_network}
 
-  target: "incremental"
+  target:  "periodic" # "incremental"
   target_kwargs:
-    step_size: 0.005
+    update_period: 5 #1000
+#    step_size: 0.005
+
+  policy_frequency: 5
+
+  tau: 0.005
 
 reward_correction: true
 
-actor_lr: 1e-4
+actor_lr: 3e-4 # 1e-4
 
-critic_lr: 1e-3
+critic_lr: 1e-3 # 1e-2
 
 optimizer:
-  _target_: "optax.multi_transform"
+  _target_: "gfn_maxent_rl.algos.soft_actor_critic.SACParameters"
 
-  transforms:
-    actor:
-      _target_: "optax.adam"
-      learning_rate: ${actor_lr}
-    critic:
-      _target_: "optax.adam"
-      learning_rate: ${critic_lr}
+  actor:
+    _target_: "optax.adam"
+    learning_rate: ${actor_lr}
 
-  param_labels:
-    _target_: "gfn_maxent_rl.algos.soft_actor_critic.SACParameters"
-    actor: "actor"
-    critic1: "critic"
-    critic2: "critic"
+  critic:
+    _target_: "optax.adam"
+    learning_rate: ${critic_lr}
 
 exp_name_algorithm: "sac"
