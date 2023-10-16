@@ -112,10 +112,13 @@ class SAC(BaseAlgorithm):
         net_state = SACParameters(actor=actor_state, critic=(critic1_state, critic2_state))
 
         # Initialize the state of the optimizers
-        opt_state = SACParameters(
-            actor=self.optimizer.actor.init(online_params.actor),
-            critic=self.optimizer.critic.init(online_params.critic),
-        )
+        if self.policy_frequency > 0:
+            opt_state = SACParameters(
+                actor=self.optimizer.actor.init(online_params.actor),
+                critic=self.optimizer.critic.init(online_params.critic),
+            )
+        else:
+            opt_state = self.optimizer.init(online_params)
 
         # Initialize the state
         state = AlgoState(
@@ -209,3 +212,26 @@ class SAC(BaseAlgorithm):
         state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
 
         return (params, state, logs)
+    
+    @property
+    def optimizer(self):
+        if self._optimizer is None:
+            raise RuntimeError('The optimizer is not defined. To train the '
+                'model, you must set `model.optimizer = optax.sgd(...)` first.')
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, value):
+        if self.policy_frequency > 0:
+            self._optimizer = jax.tree_util.tree_map(
+                lambda opt: optax.chain(opt, optax.zero_nans()),
+                value,
+                is_leaf=lambda opt: isinstance(opt, optax.GradientTransformation)
+            )
+        else:
+            self._optimizer = optax.chain(
+                optax.multi_transform(
+                    value._asdict(),
+                    SACParameters(actor='actor', critic='critic')
+                ), optax.zero_nans()
+            )
