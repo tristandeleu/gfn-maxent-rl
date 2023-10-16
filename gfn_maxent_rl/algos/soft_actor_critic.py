@@ -131,12 +131,13 @@ class SAC(BaseAlgorithm):
         return log_pi
 
     def periodic_update_td3(self, params_actor, params_critic, state, samples, num_updates=1):
+        opt_state_actor = state.optimizer.actor
         for _ in range(num_updates):
             (actor_loss, logs_actor), grads_actor = jax.value_and_grad(self.actor_loss, has_aux=True)(
                 params_actor, params_critic, state.network, samples)  # Use the updated critic parameters
 
             updates_actor, opt_state_actor = self.optimizer.actor.update(
-                grads_actor, state.optimizer.actor, params_actor)
+                grads_actor, opt_state_actor, params_actor)
             params_actor = optax.apply_updates(params_actor, updates_actor)
 
         return params_actor, opt_state_actor, actor_loss, logs_actor
