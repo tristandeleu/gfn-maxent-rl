@@ -144,31 +144,44 @@ class SAC(BaseAlgorithm):
 
     @partial(jax.jit, static_argnums=(0,))
     def step(self, params, state, samples):
-        # Update of the parameters of the critic
-        (critic_loss, logs), grads_critic = jax.value_and_grad(self.critic_loss, has_aux=True)(
-            params.online.critic, params.online.actor, params.target, state.network, samples)
+        if self.policy_frequency > 0:
+            # Delayed updates of actor/critic
+            # Update of the parameters of the critic
+            (critic_loss, logs), grads_critic = jax.value_and_grad(self.critic_loss, has_aux=True)(
+                params.online.critic, params.online.actor, params.target, state.network, samples)
 
-        updates_critic, opt_state_critic = self.optimizer.critic.update(
-            grads_critic, state.optimizer.critic, params.online.critic)
-        params_critic = optax.apply_updates(params.online.critic, updates_critic)
+            updates_critic, opt_state_critic = self.optimizer.critic.update(
+                grads_critic, state.optimizer.critic, params.online.critic)
+            params_critic = optax.apply_updates(params.online.critic, updates_critic)
 
-        # Update the parameters of the actor with TD3 support
-        params_actor, opt_state_actor, actor_loss, logs_actor = optax.periodic_update(
-            self.periodic_update_td3(
-                params.online.actor,
-                params_critic,
-                state,
-                samples,
-                num_updates=self.policy_frequency
-            ),
-            (params.online.actor, state.optimizer.actor, 0., {}),
-            state.steps + 1,
-            self.policy_frequency
-        )
+            # Update the parameters of the actor with TD3 support
+            params_actor, opt_state_actor, actor_loss, logs_actor = optax.periodic_update(
+                self.periodic_update_td3(
+                    params.online.actor,
+                    params_critic,
+                    state,
+                    samples,
+                    num_updates=self.policy_frequency
+                ),
+                (params.online.actor, state.optimizer.actor, 0., {}),
+                state.steps + 1,
+                self.policy_frequency
+            )
 
-        # Pack the parameters & optimizer state
-        online_params = SACParameters(actor=params_actor, critic=params_critic)
-        opt_state = SACParameters(actor=opt_state_actor, critic=opt_state_critic)
+            # Pack the parameters & optimizer state
+            online_params = SACParameters(actor=params_actor, critic=params_critic)
+            opt_state = SACParameters(actor=opt_state_actor, critic=opt_state_critic)
+
+            # Update the logs
+            logs.update(logs_actor)
+            logs['loss'] = actor_loss + critic_loss
+        else:
+            # Synchronous update of actor/critic
+            grads, logs = jax.grad(self.loss, has_aux=True)(params.online, params.target, state.network, samples)
+
+            # Update the online parameters
+            updates, opt_state = self.optimizer.update(grads, state.optimizer, params.online)
+            online_params = optax.apply_updates(params.online, updates)
 
         # Update the target parameters
         if self.target == 'periodic':
@@ -195,7 +208,4 @@ class SAC(BaseAlgorithm):
         params = AlgoParameters(online=online_params, target=target_params)
         state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
 
-        # Update the logs
-        logs.update(logs_actor)
-        logs['loss'] = actor_loss + critic_loss
         return (params, state, logs)
