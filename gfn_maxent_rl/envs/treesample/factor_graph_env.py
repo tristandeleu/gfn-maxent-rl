@@ -23,6 +23,8 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             assert potential.size == self.num_categories ** len(clique)
 
         self._state = np.full((num_envs, self.num_variables), -1, dtype=np.int_)
+        self._all_terminating_states, self._all_terminating_keys = None, None
+        self._state_graph = None
 
         observation_space = Dict({
             'variables': Box(
