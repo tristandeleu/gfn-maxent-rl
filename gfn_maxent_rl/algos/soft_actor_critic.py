@@ -103,7 +103,7 @@ class SAC(BaseAlgorithm):
         critic2_params, critic2_state = self.critic_network.init(subkey3, samples['observation'])
         online_params = SACParameters(actor=actor_params, critic=(critic1_params, critic2_params))
 
-        target_params = (critic1_params, critic2_params) if self.use_target else None
+        target_params = online_params.critic if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
         # Set the normalization to the size of the dataset
