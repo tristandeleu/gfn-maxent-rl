@@ -11,7 +11,7 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 import datetime
 
-from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, entropy
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 from gfn_maxent_rl.utils.evaluations import evaluation
@@ -78,9 +78,11 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
-    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target={
+    target = {
         'log_probs': exact_log_posterior(env, batch_size=config.batch_size)
-    })
+    }
+    wandb.summary['target/entropy'] = entropy(target['log_probs'])
+    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target=target)
 
     observations, _ = env.reset()
     indices = None
@@ -128,7 +130,9 @@ def main(config):
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({
                     'loss': logs["loss"].item(),
-                    'step': train_steps
+                    'step': train_steps,
+                    'loss/actor': logs['actor_loss'].mean().item() if ('actor_loss' in logs) else 0.,
+                    'loss/critic': logs['critic_loss'].mean().item() if ('critic_loss' in logs) else 0.,
                 })
 
     evaluator.join()

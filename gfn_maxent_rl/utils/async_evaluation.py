@@ -6,7 +6,7 @@ from queue import Empty as EmptyException
 from collections import defaultdict
 
 from gfn_maxent_rl.utils.exhaustive import compute_cache, push_source_flow_to_terminating_states
-from gfn_maxent_rl.utils.metrics import jensen_shannon_divergence
+from gfn_maxent_rl.utils.metrics import jensen_shannon_divergence, entropy
 
 
 class AsyncEvaluator:
@@ -88,7 +88,8 @@ class AsyncEvaluator:
                 metrics = dict()
                 for step, distribution in zip(steps, log_probs):
                     metrics[step] = {
-                        'jsd': jensen_shannon_divergence(distribution, target['log_probs'])
+                        'jsd': jensen_shannon_divergence(distribution, target['log_probs']),
+                        'entropy': entropy(distribution),
                     }
 
                 # Send to Wandb

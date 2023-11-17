@@ -166,3 +166,5 @@ wandb/
 artifacts/
 outputs/
 run.sh
+gfn_maxent_rl/envs/bio_seq/data/rna/**/mode_info.pkl
+gfn_maxent_rl/envs/bio_seq/data/rna/**/modes.json

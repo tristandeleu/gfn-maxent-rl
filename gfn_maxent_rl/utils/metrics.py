@@ -56,3 +56,10 @@ def jensen_shannon_divergence(distribution1, distribution2):
     kl1 = np.exp(log_probs1) * (log_probs1 - log_probs_mean)
     kl2 = np.exp(log_probs2) * (log_probs2 - log_probs_mean)
     return 0.5 * np.sum(kl1 + kl2)
+
+
+def entropy(distribution):
+    assert isinstance(distribution, dict)
+
+    log_probs = np.asarray(list(distribution.values()))
+    return -np.sum(np.exp(log_probs) * log_probs)
