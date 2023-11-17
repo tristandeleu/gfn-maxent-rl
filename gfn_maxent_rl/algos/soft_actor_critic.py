@@ -44,7 +44,7 @@ class SAC(BaseAlgorithm):
         logs = {}
         return (loss, logs)
 
-    def critic_loss(self, critic_online_params, actor_online_params, target_params, state, samples):
+    def critic_loss(self, critic_online_params, actor_online_params, critic_target_params, state, samples):
         action_masks_tp1 = self.env.action_mask(samples['next_observation'])
 
         # Actor network
@@ -55,7 +55,7 @@ class SAC(BaseAlgorithm):
         Q1_t, Q2_t = self._apply_critic(critic_online_params, state.critic, samples['observation'])
 
         # Get Q(G_t+1, .) for the next graph
-        params = target_params.critic if self.use_target else critic_online_params
+        params = critic_target_params if self.use_target else critic_online_params
         Q1_tp1, Q2_tp1 = self._apply_critic(params, state.critic, samples['next_observation'])
 
         # Critic loss
@@ -103,7 +103,7 @@ class SAC(BaseAlgorithm):
         critic2_params, critic2_state = self.critic_network.init(subkey3, samples['observation'])
         online_params = SACParameters(actor=actor_params, critic=(critic1_params, critic2_params))
 
-        target_params = online_params if self.use_target else None
+        target_params = (critic1_params, critic2_params) if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 
         # Set the normalization to the size of the dataset
@@ -191,7 +191,7 @@ class SAC(BaseAlgorithm):
             target_params = optax.periodic_update(
                 jax.tree_util.tree_map(
                     lambda new, old: self.tau * new + (1.0 - self.tau) * old,
-                    online_params, params.target),
+                    online_params.critic, params.target),
                 params.target,
                 state.steps + 1,
                 **self.target_kwargs
@@ -199,7 +199,7 @@ class SAC(BaseAlgorithm):
 
         elif self.target == 'incremental':
             target_params = optax.incremental_update(
-                online_params,
+                online_params.critic,
                 params.target,
                 **self.target_kwargs
             )
