@@ -130,7 +130,9 @@ def main(config):
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
                 wandb.log({
                     'loss': logs["loss"].item(),
-                    'step': train_steps
+                    'step': train_steps,
+                    'loss/actor': logs['actor_loss'].mean().item() if ('actor_loss' in logs) else 0.,
+                    'loss/critic': logs['critic_loss'].mean().item() if ('critic_loss' in logs) else 0.,
                 })
 
     evaluator.join()

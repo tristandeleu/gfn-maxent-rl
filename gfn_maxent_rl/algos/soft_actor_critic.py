@@ -91,7 +91,7 @@ class SAC(BaseAlgorithm):
         
         # Update the logs
         logs.update(critic_logs)
-        logs['loss'] = loss
+        logs.update({'actor_loss': actor_loss, 'loss': loss})
         return (loss, logs)
 
     def init(self, key, samples, normalization=1):
