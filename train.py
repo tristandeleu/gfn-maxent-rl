@@ -11,7 +11,7 @@ from numpy.random import default_rng
 from tqdm.auto import trange
 import datetime
 
-from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd
+from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, entropy
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 from gfn_maxent_rl.utils.evaluations import evaluation
@@ -78,9 +78,11 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
-    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target={
+    target = {
         'log_probs': exact_log_posterior(env, batch_size=config.batch_size)
-    })
+    }
+    wandb.summary['target/entropy'] = entropy(target['log_probs'])
+    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target=target)
 
     observations, _ = env.reset()
     indices = None
