@@ -9,14 +9,19 @@ from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 from functools import partial
 
 SACParameters = namedtuple('SACParameters', ['actor', 'critic'])
+AlgoParameters = namedtuple('AlgoParameters', ['online', 'target', 'reset'])
+
 
 class SAC(BaseAlgorithm):
-    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1, tau=0.005):
+    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1, tau=0.005,
+                 use_reset=True, reset_period=5500):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
         self.critic_network = hk.without_apply_rng(hk.transform_with_state(critic_network))
         self.policy_frequency = policy_frequency
         self.tau = tau
+        self.use_reset = use_reset
+        self.reset_period = reset_period
 
     def _apply_critic(self, params, state, observations):
         Q1, _ = self.critic_network.apply(params[0], state[0], observations)
@@ -104,7 +109,9 @@ class SAC(BaseAlgorithm):
         online_params = SACParameters(actor=actor_params, critic=(critic1_params, critic2_params))
 
         target_params = online_params.critic if self.use_target else None
-        params = AlgoParameters(online=online_params, target=target_params)
+        reset_params = online_params.critic if self.use_reset else None
+        params = AlgoParameters(online=online_params, target=target_params, reset=reset_params)
+        # import pdb; pdb.set_trace()
 
         # Set the normalization to the size of the dataset
         actor_state['~']['normalization'] = jnp.full_like(
@@ -208,7 +215,27 @@ class SAC(BaseAlgorithm):
         else:
             raise ValueError(f'Unknown target: {self.target}')
 
-        params = AlgoParameters(online=online_params, target=target_params)
+        # reset the critic parameters
+        if self.use_reset:
+            reset_period = jax.lax.select(
+                state.steps + 1 <= 60000,
+                self.reset_period,
+                1000000
+            )
+            (target_params[0]['senders/~/linear_1']['w'], target_params[1]['senders/~/linear_1']['w']) = optax.periodic_update(
+                (params.reset[0]['senders/~/linear_1']['w'], params.reset[1]['senders/~/linear_1']['w']),
+                (target_params[0]['senders/~/linear_1']['w'], target_params[1]['senders/~/linear_1']['w']),
+                state.steps + 1,
+                update_period=reset_period
+            )
+            (target_params[0]['receivers/~/linear_1']['w'], target_params[1]['receivers/~/linear_1']['w']) = optax.periodic_update(
+                (params.reset[0]['receivers/~/linear_1']['w'], params.reset[1]['receivers/~/linear_1']['w']),
+                (target_params[0]['receivers/~/linear_1']['w'], target_params[1]['receivers/~/linear_1']['w']),
+                state.steps + 1,
+                update_period=reset_period
+            )
+
+        params = AlgoParameters(online=online_params, target=target_params, reset=params.reset)
         state = AlgoState(optimizer=opt_state, steps=state.steps + 1, network=state.network)
 
         return (params, state, logs)
