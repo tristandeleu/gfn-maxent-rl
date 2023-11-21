@@ -18,7 +18,9 @@ algorithm:
 
   use_reset: True # reset the critic every `reset_period` iteration
 
-  reset_period: 5500
+  reset_period: 10_000
+
+  max_reset: 50_000
 
 reward_correction: true
 
