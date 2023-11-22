@@ -185,7 +185,8 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
                 for i, variable in enumerate(state):
                     if variable == -1:
                         edges.extend([
-                            (state, state[:i] + (value,) + state[i+1:])
+                            (state, state[:i] + (value,) + state[i+1:],
+                            {'action': i * self.num_categories + value})
                             for value in range(self.num_categories)
                         ])
 
