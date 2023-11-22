@@ -5,7 +5,6 @@ env:
 
   # Name of the environment
   name: "chain" 
-  env_name: "chain"
 
   # Number of variables in the factor graph
   num_variables: 8 #10
