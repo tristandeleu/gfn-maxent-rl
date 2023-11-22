@@ -4,13 +4,14 @@ env:
   _target_: "gfn_maxent_rl.envs.treesample.factories.get_treesample_env"
 
   # Name of the environment
-  name: "chain"
+  name: "chain" 
+  env_name: "chain"
 
   # Number of variables in the factor graph
-  num_variables: 10
+  num_variables: 8 #10
 
   # Number of values each discrete variable may take
-  num_categories: 5
+  num_categories: 4 #5
 
   # Use a fixed ordering for variable assignments
   fixed_ordering: false
