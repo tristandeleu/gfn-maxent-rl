@@ -23,8 +23,7 @@ def main(config):
     wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    config.experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' +\
-                             config.env.score_name + '_' + time
+    config.experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
     run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
