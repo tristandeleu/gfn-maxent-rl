@@ -16,13 +16,11 @@ algorithm:
 
   tau: 1
 
-  use_reset: True # reset the critic every `reset_period` iteration
+  use_reset: False # reset the critic every `reset_period` iteration
 
   reset_period: 10_000
 
   max_reset: 50_000
-
-  env_name: ${env.name}
 
 reward_correction: true
 

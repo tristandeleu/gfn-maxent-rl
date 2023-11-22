@@ -13,7 +13,6 @@ env:
   # Score to compute the log-marginal likelihood log P(D | G)
   score_name: "zero" # 'zero', 'lingauss', 'bge'
   score_kwargs: {}
-  env_name: "dag_gfn"
 
 env_wrapper:
   _target_: "gfn_maxent_rl.envs.dag_gfn.wrappers.RewardCorrection"
