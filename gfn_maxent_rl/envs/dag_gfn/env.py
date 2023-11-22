@@ -143,7 +143,7 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     # Method for evaluation
 
-    def all_states_batch_iterator(self, batch_size):
+    def all_states_batch_iterator(self, batch_size, terminating=False):
         if self._all_dags_compressed is None:
             self._all_dags_compressed = get_all_dags_compressed(self.num_variables)
             self._all_dags_keys = get_all_dags_keys(
@@ -167,7 +167,6 @@ class DAGEnvironment(gym.vector.VectorEnv):
             }
 
             yield (keys, observations)
-
 
     def log_reward(self, observations):
         return self.joint_model.log_prob(observations['adjacency'])

@@ -75,7 +75,7 @@ def push_source_flow_to_terminating_states(mdp_state_graph, cache):
 def exact_log_posterior(env, batch_size=256):
     log_posterior = dict()
 
-    for keys, observations in env.all_states_batch_iterator(batch_size):
+    for keys, observations in env.all_states_batch_iterator(batch_size, terminating=True):
         log_rewards = env.log_reward(observations)
         log_posterior.update(zip(keys, log_rewards))
 

@@ -23,7 +23,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             assert potential.size == self.num_categories ** len(clique)
 
         self._state = np.full((num_envs, self.num_variables), -1, dtype=np.int_)
-        self._all_terminating_states, self._all_terminating_keys = None, None
+        self._all_states, self._all_keys = None, None
         self._state_graph = None
 
         observation_space = Dict({
@@ -129,29 +129,34 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
     # Method for evaluation
 
-    def all_states_batch_iterator(self, batch_size):
-        num_terminating_states = self.num_categories ** self.num_variables
+    def all_states_batch_iterator(self, batch_size, terminating=False):
+        num_states = (self.num_categories + 1) ** self.num_variables
 
-        if self._all_terminating_states is None:
-            iterator = product(range(self.num_categories), repeat=self.num_variables)
-            self._all_terminating_keys = list(iterator)
-            self._all_terminating_states = np.fromiter(
-                chain(*self._all_terminating_keys),
+        if self._all_states is None:
+            iterator = product(range(-1, self.num_categories), repeat=self.num_variables)
+            self._all_keys = list(iterator)
+            self._all_states = np.fromiter(
+                chain(*self._all_keys),
                 dtype=np.int_,
-                count=num_terminating_states * self.num_variables,
+                count=num_states * self.num_variables,
             ).reshape(-1, self.num_variables)
-
-        for index in range(0, num_terminating_states, batch_size):
+        
+        if terminating:
+            is_terminating_state = np.all(self._all_states != -1, axis=1)
+            states = self._all_states[is_terminating_state]
+            keys = [key for (key, is_terminating)
+                in zip(self._all_keys, is_terminating_state) if is_terminating]
+        else:
+            states, keys = self._all_states, self._all_keys
+        
+        for index in range(0, states.shape[0], batch_size):
             slice_ = slice(index, index + batch_size)
-            keys = self._all_terminating_keys[slice_]
-
-            variables = self._all_terminating_states[slice_]
+            variables = states[slice_]
             observations = {
                 'variables': variables.astype(np.int32),
-                'mask': np.zeros_like(variables, dtype=np.float32),
+                'mask': (variables == -1).astype(np.float32),
             }
-
-            yield (keys, observations)
+            yield (keys[slice_], observations)
 
     def log_reward(self, observations):
         variables = observations['variables']
