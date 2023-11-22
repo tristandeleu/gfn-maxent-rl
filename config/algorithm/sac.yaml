@@ -22,6 +22,8 @@ algorithm:
 
   max_reset: 50_000
 
+  env_name: ${env.name}
+
 reward_correction: true
 
 actor_lr: 5e-6 # 3e-4 # 1e-4
@@ -40,3 +42,4 @@ optimizer:
     learning_rate: ${critic_lr}
 
 exp_name_algorithm: "sac"
+

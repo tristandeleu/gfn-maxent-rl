@@ -13,7 +13,7 @@ AlgoParameters = namedtuple('AlgoParameters', ['online', 'target', 'reset'])
 
 
 class SAC(BaseAlgorithm):
-    def __init__(self, env, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1, tau=0.005,
+    def __init__(self, env, env_name, actor_network, critic_network, target=None, target_kwargs={}, policy_frequency=1, tau=0.005,
                  use_reset=True, reset_period=10000, max_reset=50000):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.actor_network = hk.without_apply_rng(hk.transform_with_state(actor_network))
@@ -23,6 +23,7 @@ class SAC(BaseAlgorithm):
         self.use_reset = use_reset
         self.reset_period = reset_period
         self.max_reset = max_reset
+        self.env_name = env_name
 
     def _apply_critic(self, params, state, observations):
         Q1, _ = self.critic_network.apply(params[0], state[0], observations)
@@ -217,7 +218,7 @@ class SAC(BaseAlgorithm):
             raise ValueError(f'Unknown target: {self.target}')
 
         # reset the critic parameters
-        if self.use_reset:
+        if self.use_reset and self.env_name == "dag_gfn":
             reset_period = jax.lax.select(
                 state.steps + 1 <= self.max_reset,
                 self.reset_period,
