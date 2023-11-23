@@ -89,3 +89,27 @@ def q_network(num_categories):
         return jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
     return network
+
+
+def f_network(num_categories):
+    def network(observations):
+        batch_size, num_variables = observations['variables'].shape
+        output_size = 1
+
+        # First layer of the MLP
+        hiddens = hk.Embed(
+            num_categories + 1,
+            embed_dim=256
+        )(observations['variables'] + 1)
+        hiddens = jnp.sum(hiddens, axis=1)
+        hiddens = jax.nn.leaky_relu(hiddens)
+
+        # Rest of the MLP
+        f_values_continue = hk.nets.MLP(
+            (256, 256, output_size),
+            activation=jax.nn.leaky_relu
+        )(hiddens)
+
+        return jnp.squeeze(f_values_continue, axis=-1)
+
+    return network
