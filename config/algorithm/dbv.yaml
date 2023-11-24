@@ -1,0 +1,34 @@
+# @package _global_
+
+algorithm:
+  _target_: "gfn_maxent_rl.algos.detailed_balance_vanilla.GFNDetailedBalanceVanilla"
+
+  policy_network: ${policy_network}
+
+  flow_network: ${flow_network}
+
+  target: "periodic"
+  target_kwargs:
+    update_period: 1000
+
+#policy_lr: 5e-6
+#
+#flow_lr: 1e-4
+
+
+#optimizer:
+#  _target_: "gfn_maxent_rl.algos.detailed_balance_vanilla.DBVParameters"
+#
+#  policy:
+#    _target_: "optax.adam"
+#    learning_rate: ${policy_lr}
+#
+#  flow:
+#    _target_: "optax.adam"
+#    learning_rate: ${flow_lr}
+
+optimizer:
+  _target_: "optax.adam"
+  learning_rate: ${lr}
+
+exp_name_algorithm: "dbv"
