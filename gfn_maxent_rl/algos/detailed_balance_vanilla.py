@@ -5,12 +5,10 @@ import jax
 
 from collections import namedtuple
 
-from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoState
-from functools import partial
-# from gfn_maxent_rl.envs.dag_gfn import DAGEnvironment
+from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoState, AlgoParameters
+
 
 DBVParameters = namedtuple('DBVParameters', ['policy', 'flow'])
-AlgoParameters = namedtuple('AlgoParameters', ['online', 'target'])
 
 
 class GFNDetailedBalanceVanilla(BaseAlgorithm):
@@ -19,36 +17,18 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
         self.policy_network = hk.without_apply_rng(hk.transform_with_state(policy_network))
         self.flow_network = hk.without_apply_rng(hk.transform_with_state(flow_network))
 
-    def _apply_flow(self, params, state, observations):
-        F, _ = self.flow_network.apply(params, state, observations)
-        # Q2, _ = self.critic_network.apply(params[1], state[1], observations)
-        # return (Q1, Q2)
-        return F
-
     def loss(self, online_params, target_params, state, samples):
-        """
-        P_F: Forward policy
-        P_B: Backward policy
-        F: Flow
-        """
-        action_masks = self.env.action_mask(samples['next_observation'])
-
         # Get log P_F(. | G_t) for the current graph
         log_pi_t, _ = self.policy_network.apply(
             online_params.policy, state.policy, samples['observation'])
 
-        # Get log F(G_t, .) for the current graph
-        log_F_t = self._apply_flow(
+        # Get log F(G_t) for the current graph
+        log_F_t, _ = self.flow_network.apply(
             online_params.flow, state.flow, samples['observation'])
 
-        # # Get log P_F(. | G_t+1) for the next graph
-        # params = target_params if self.use_target else online_params
-        # log_pi_tp1, _ = self.policy_network.apply(
-        #     params.policy, state.policy, samples['next_observation'])
-
-        # Get log F(G_t+1, .) for the next graph
+        # Get log F(G_t+1) for the next graph
         params = target_params if self.use_target else online_params
-        log_F_tp1 = self._apply_flow(
+        log_F_tp1, _ = self.flow_network.apply(
             params.flow, state.flow, samples['next_observation'])
 
         # Compute the detailed balance (vanilla) loss
@@ -66,7 +46,7 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
         return (loss, logs)
 
     def init(self, key, samples, normalization=1):
-        subkey1, subkey2, subkey3 = jax.random.split(key, 3)
+        subkey1, subkey2 = jax.random.split(key)
 
         # Initialize the network parameters (both online, and possibly target)
         policy_params, policy_state = self.policy_network.init(subkey1, samples['observation'])
