@@ -96,20 +96,22 @@ def f_network(num_categories):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
 
+        one_hots = jax.nn.one_hot(observations['variables']+1, num_categories+1)
+        one_hots = one_hots.reshape(batch_size, num_variables*(num_categories+1))
+        
         # First layer of the MLP
-        hiddens = hk.Embed(
-            num_categories + 1,
-            embed_dim=256
-        )(observations['variables'] + 1)
-        hiddens = jnp.sum(hiddens, axis=1)
-        hiddens = jax.nn.leaky_relu(hiddens)
+        # hiddens = hk.Embed(
+        #     num_categories + 1,
+        #     embed_dim=256, lookup_style='ONE_HOT'
+        # )(one_hots.astype(int))
 
         # Rest of the MLP
         f_values_continue = hk.nets.MLP(
             (256, 256, output_size),
             activation=jax.nn.leaky_relu
-        )(hiddens)
+        )(one_hots)
 
         return jnp.squeeze(f_values_continue, axis=-1)
 
     return network
+

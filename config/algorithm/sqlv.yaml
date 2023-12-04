@@ -9,6 +9,8 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
+  policy_frequency: 0
+
 reward_correction: true
 
 optimizer:

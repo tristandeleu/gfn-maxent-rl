@@ -12,10 +12,11 @@ DBVParameters = namedtuple('DBVParameters', ['policy', 'flow'])
 
 
 class GFNDetailedBalanceVanilla(BaseAlgorithm):
-    def __init__(self, env, policy_network, flow_network, target=None, target_kwargs={}):
+    def __init__(self, env, policy_network, flow_network, target=None, target_kwargs={}, policy_frequency=0):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.policy_network = hk.without_apply_rng(hk.transform_with_state(policy_network))
         self.flow_network = hk.without_apply_rng(hk.transform_with_state(flow_network))
+        self.policy_frequency = policy_frequency
 
     def loss(self, online_params, target_params, state, samples):
         # Get log P_F(. | G_t) for the current graph
@@ -43,6 +44,7 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
         loss = jnp.mean(optax.huber_loss(errors, delta=1.))
 
         logs = {'errors': errors, 'loss': loss}
+
         return (loss, logs)
 
     def init(self, key, samples, normalization=1):
@@ -62,7 +64,13 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
         net_state = DBVParameters(policy=policy_state, flow=flow_state)
 
         # Initialize the state of the optimizers
-        opt_state = self.optimizer.init(online_params)
+        if self.policy_frequency > 0:
+            opt_state = SACParameters(
+                policy=self.optimizer.policy.init(online_params.policy),
+                flow=self.optimizer.flow.init(online_params.flow),
+            )
+        else:
+            opt_state = self.optimizer.init(online_params)
 
         # Initialize the state
         state = AlgoState(
