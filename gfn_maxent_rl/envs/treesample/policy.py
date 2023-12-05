@@ -41,27 +41,67 @@ def action_mask(masks, num_categories):
 
 
 def policy_network(num_categories):
+    # def network(observations):
+    #     num_variables = observations['variables'].shape[1]
+    #     output_size = num_variables * num_categories
+    #
+    #     # First layer of the MLP
+    #     hiddens = hk.Embed(
+    #         num_categories + 1,
+    #         embed_dim=256
+    #     )(observations['variables'] + 1)
+    #     hiddens = jnp.sum(hiddens, axis=1)
+    #     hiddens = jax.nn.leaky_relu(hiddens)
+    #
+    #     # Rest of the MLP
+    #     logits = hk.nets.MLP(
+    #         (256, 256, output_size),
+    #         activation=jax.nn.leaky_relu
+    #     )(hiddens)
+    #
+    #     # Mask out the invalid actions
+    #     norm = hk.get_state('normalization', (), init=jnp.ones)
+    #     return log_policy(logits * norm, observations['mask'], num_categories)
+    #
+    # return network
+
     def network(observations):
-        num_variables = observations['variables'].shape[1]
-        output_size = num_variables * num_categories
+        batch_size, num_variables = observations['variables'].shape
+        # output_size = num_variables * num_categories
+        output_size = num_categories
+        transformer = Transformer()
+        # embed_dim = 256
+        # seq_len = 5
+        # model_size = 128
 
-        # First layer of the MLP
-        hiddens = hk.Embed(
+        # one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
+        # token_embeddings = one_hots.reshape(batch_size, num_variables*(num_categories+1))
+
+        embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
+        token_embeddings = hk.Embed(
             num_categories + 1,
-            embed_dim=256
-        )(observations['variables'] + 1)
-        hiddens = jnp.sum(hiddens, axis=1)
-        hiddens = jax.nn.leaky_relu(hiddens)
+            embed_dim=256,
+            w_init=embed_init
+        )(observations['variables'] + 1) # token_embeddings.astype(int))
 
-        # Rest of the MLP
-        logits = hk.nets.MLP(
-            (256, 256, output_size),
-            activation=jax.nn.leaky_relu
-        )(hiddens)
+        # positional_embeddings = jnp.zeros_like(token_embeddings)
+        positional_embeddings = hk.get_parameter(
+            'positional_embeddings', [6, 256], init=embed_init) # [6, 256]
 
-        # Mask out the invalid actions
+        input_embeddings = token_embeddings + positional_embeddings
+
+        embeddings = transformer(input_embeddings)  # , input_mask)
+
+        # Pass the output of Transformer to a one-layer MLP
+        # hiddens = hk.Embed(
+        #     num_categories + 1,
+        #     output_size
+        # )(embeddings)
+
+        out = hk.Linear(output_size)(embeddings).reshape(batch_size, num_variables * num_categories)
         norm = hk.get_state('normalization', (), init=jnp.ones)
-        return log_policy(logits * norm, observations['mask'], num_categories)
+        # import pdb; pdb.set_trace()
+        return log_policy(out * norm, observations['mask'], num_categories)
 
     return network
 
@@ -125,20 +165,19 @@ def f_network(num_categories):
         seq_len = 5
         model_size = 128
 
-        one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
-        token_embeddings = one_hots.reshape(batch_size, num_variables*(num_categories+1))
+        # one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
+        # token_embeddings = one_hots.reshape(batch_size, num_variables*(num_categories+1))
 
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
         token_embeddings = hk.Embed(
             num_categories + 1,
             embed_dim=256,
             w_init=embed_init
-        )(token_embeddings.astype(int))
+        )(observations['variables'] + 1) #token_embeddings.astype(int))
 
         # positional_embeddings = jnp.zeros_like(token_embeddings)
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [30, 256], init=embed_init) # [6, 256]
-        # import pdb; pdb.set_trace()
+            'positional_embeddings', [6, 256], init=embed_init) # [6, 256]
 
         input_embeddings = token_embeddings + positional_embeddings
 
