@@ -11,6 +11,8 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
+  policy_frequency: 0
+
 #policy_lr: 5e-6
 #
 #flow_lr: 1e-4

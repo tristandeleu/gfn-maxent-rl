@@ -7,10 +7,10 @@ env:
   name: "chain" 
 
   # Number of variables in the factor graph
-  num_variables: 8 #10
+  num_variables: 6
 
   # Number of values each discrete variable may take
-  num_categories: 4 #5
+  num_categories: 4
 
   # Use a fixed ordering for variable assignments
   fixed_ordering: false
@@ -20,15 +20,15 @@ env_wrapper:
   alpha: 1.0
 
 policy_network:
-  _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network"
+  _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network_transformer"
   num_categories: ${env.num_categories}
 
 value_network:
-  _target_: "gfn_maxent_rl.envs.treesample.policy.q_network"
+  _target_: "gfn_maxent_rl.envs.treesample.policy.q_network_transformer"
   num_categories: ${env.num_categories}
 
 flow_network:
-  _target_: "gfn_maxent_rl.envs.treesample.policy.f_network"
+  _target_: "gfn_maxent_rl.envs.treesample.policy.f_network_transformer"
   num_categories: ${env.num_categories}
 
 
