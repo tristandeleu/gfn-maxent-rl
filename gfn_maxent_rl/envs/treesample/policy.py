@@ -2,8 +2,6 @@ import jax.numpy as jnp
 import haiku as hk
 import jax
 
-import dataclasses
-
 from gfn_maxent_rl.nets.transformer import Transformer
 
 
@@ -42,7 +40,7 @@ def action_mask(masks, num_categories):
     return jnp.concatenate((masks_continue, masks_stop), axis=1)
 
 
-def policy_network_MLP(num_categories):
+def policy_network_mlp(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_variables * num_categories
@@ -66,7 +64,6 @@ def policy_network_transformer(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_categories
-        transformer = Transformer()
 
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
         token_embeddings = hk.Embed(
@@ -76,26 +73,27 @@ def policy_network_transformer(num_categories):
         )(observations['variables'] + 1)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [6, 256], init=embed_init)
+            'positional_embeddings', [num_variables, 256], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = transformer(input_embeddings)
+        embeddings = Transformer()(input_embeddings)
+        logits = hk.Linear(output_size)(embeddings)
+        logits = logits.reshape(batch_size, num_variables * num_categories)
 
-        out = hk.Linear(output_size)(embeddings).reshape(batch_size, num_variables * num_categories)
         norm = hk.get_state('normalization', (), init=jnp.ones)
-        return log_policy(out * norm, observations['mask'], num_categories)
+        return log_policy(logits * norm, observations['mask'], num_categories)
 
     return network
 
 
-def q_network_MLP(num_categories):
+def q_network_mlp(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_variables * num_categories
 
         one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
-        one_hots = one_hots.reshape(batch_size, num_variables*(num_categories+1))
+        one_hots = one_hots.reshape(batch_size, num_variables * (num_categories + 1))
 
         q_values_continue = hk.nets.MLP(
             (256, 256, output_size),
@@ -104,9 +102,9 @@ def q_network_MLP(num_categories):
 
         # Value of the stop action is 0
         q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
-        out = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
+        outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
-        return out
+        return outputs
 
     return network
 
@@ -115,7 +113,6 @@ def q_network_transformer(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_categories
-        transformer = Transformer()
 
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
         token_embeddings = hk.Embed(
@@ -125,30 +122,30 @@ def q_network_transformer(num_categories):
         )(observations['variables'] + 1)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [6, 256], init=embed_init)
+            'positional_embeddings', [num_variables, 256], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = transformer(input_embeddings)
-
-        q_values_continue = hk.Linear(output_size)(embeddings).reshape(batch_size, num_variables * num_categories)  # [1, 6*4] [batch, num_variables * num_variables * num_categories]
+        embeddings = Transformer()(input_embeddings)
+        q_values_continue = hk.Linear(output_size)(embeddings)
+        q_values_continue = q_values_continue.reshape(batch_size, num_variables * num_categories)  # [batch, num_variables * num_categories]
 
         # Value of the stop action is 0
         q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
-        out = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
+        outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
-        return out
+        return outputs
 
     return network
 
 
-def f_network_MLP(num_categories):
+def f_network_mlp(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
 
-        one_hots = jax.nn.one_hot(observations['variables']+1, num_categories+1)
-        one_hots = one_hots.reshape(batch_size, num_variables*(num_categories+1))
+        one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
+        one_hots = one_hots.reshape(batch_size, num_variables * (num_categories + 1))
 
         f_values_continue = hk.nets.MLP(
             (256, 256, output_size),
@@ -164,7 +161,6 @@ def f_network_transformer(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
-        transformer = Transformer()
 
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
         token_embeddings = hk.Embed(
@@ -174,18 +170,13 @@ def f_network_transformer(num_categories):
         )(observations['variables'] + 1)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [6, 256], init=embed_init)
+            'positional_embeddings', [num_variables, 256], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = transformer(input_embeddings)
+        embeddings = Transformer()(input_embeddings)
+        outputs = hk.Linear(output_size)(embeddings)
 
-        out = hk.Linear(output_size)(embeddings)
-
-        return out
+        return outputs
 
     return network
-
-
-
-
