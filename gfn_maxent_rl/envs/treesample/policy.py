@@ -161,20 +161,21 @@ def f_network_transformer(num_categories):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
+        embed_dim = 256
 
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
         token_embeddings = hk.Embed(
             num_categories + 1,
-            embed_dim=256,
+            embed_dim=embed_dim,
             w_init=embed_init
         )(observations['variables'] + 1)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [num_variables, 256], init=embed_init)
+            'positional_embeddings', [num_variables, embed_dim], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
+        embeddings = Transformer()(input_embeddings).reshape(batch_size, num_variables * embed_dim)
         outputs = hk.Linear(output_size)(embeddings)
 
         return outputs
