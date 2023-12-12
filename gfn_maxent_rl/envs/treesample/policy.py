@@ -175,9 +175,10 @@ def f_network_transformer(num_categories):
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings).reshape(batch_size, num_variables * embed_dim)
+        embeddings = Transformer()(input_embeddings)
+        embeddings = embeddings.reshape(batch_size, num_variables * embed_dim)
         outputs = hk.Linear(output_size)(embeddings)
 
-        return outputs
+        return jnp.squeeze(outputs, axis=-1)
 
     return network

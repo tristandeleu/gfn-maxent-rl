@@ -65,7 +65,7 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
 
         # Initialize the state of the optimizers
         if self.policy_frequency > 0:
-            opt_state = SACParameters(
+            opt_state = DBVParameters(
                 policy=self.optimizer.policy.init(online_params.policy),
                 flow=self.optimizer.flow.init(online_params.flow),
             )
