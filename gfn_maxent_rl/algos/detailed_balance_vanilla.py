@@ -85,3 +85,19 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
         log_pi, _ = self.policy_network.apply(params.policy, state.policy, observations)
 
         return log_pi
+
+    @property
+    def optimizer(self):
+        if self._optimizer is None:
+            raise RuntimeError('The optimizer is not defined. To train the '
+                'model, you must set `model.optimizer = optax.sgd(...)` first.')
+        return self._optimizer
+
+    @optimizer.setter
+    def optimizer(self, value):
+        self._optimizer = optax.chain(
+            optax.multi_transform(
+                value._asdict(),
+                DBVParameters(policy='policy', flow='flow')
+            ), optax.zero_nans()
+        )

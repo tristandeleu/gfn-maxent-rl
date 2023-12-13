@@ -17,33 +17,23 @@ class Transformer(hk.Module):
     inspired from:
     https://github.com/google-deepmind/dm-haiku/blob/6339353cab51d3d71f172d1bbe2d216c33ce09a4/examples/transformer/model.py#L41
     """
-    def __init__(self,
-    num_heads=8,  # Number of attention heads.
-    num_layers=6,  # Number of transformer (attention + MLP) layers to stack.
-    attn_size=32,  # Size of the attention (key, query, value) vectors.
-    dropout_rate=0.1,  # Probability with which to apply dropout.
-    widening_factor=4,  # Factor by which the MLP hidden layer widens.
-    # name: Optional[str] = ,None  # Optional identifier for the module.
-                 ):
-        super().__init__()
-        self.num_heads = num_heads
-        self.num_layers = num_layers
-        self.attn_size = attn_size
-        self.dropout_rate = dropout_rate
-        self.widening_factor = widening_factor
 
+    num_heads: int = 8  # Number of attention heads.
+    num_layers: int = 6  # Number of transformer (attention + MLP) layers to stack.
+    attn_size: int = 32  # Size of the attention (key, query, value) vectors.
+    dropout_rate: float = 0.1  # Probability with which to apply dropout.
+    widening_factor: int = 4  # Factor by which the MLP hidden layer widens.
+
+    # name: Optional[str] = None  # Optional identifier for the module.
 
     def __call__(
             self,
             embeddings: jax.Array,  # [B, T, D]
-            rng=jax.random.PRNGKey(42),
             # mask: jax.Array,  # [B, T]
     ) -> jax.Array:  # [B, T, D]
         """Transforms input embedding sequences to output embedding sequences."""
 
-        rng = hk.PRNGSequence(rng) if rng is not None else None
-
-        initializer = hk.initializers.VarianceScaling(scale=2.)
+        initializer = hk.initializers.VarianceScaling(2 / self.num_layers)
         _, seq_len, model_size = embeddings.shape
 
         # Compute causal mask for autoregressive sequence modelling.
@@ -62,7 +52,7 @@ class Transformer(hk.Module):
             )
             h_norm = _layer_norm(h)
             h_attn = attn_block(h_norm, h_norm, h_norm)  # , mask=mask
-            h_attn = hk.dropout(next(rng), self.dropout_rate, h_attn)
+            # h_attn = hk.dropout(hk.next_rng_key(), self.dropout_rate, h_attn)
             h = h + h_attn
 
             # Then the dense block.
@@ -73,7 +63,7 @@ class Transformer(hk.Module):
             ])
             h_norm = _layer_norm(h)
             h_dense = dense_block(h_norm)
-            h_dense = hk.dropout(next(rng), self.dropout_rate, h_dense)
+            # h_dense = hk.dropout(hk.next_rng_key(), self.dropout_rate, h_dense)
             h = h + h_dense
 
         return _layer_norm(h)

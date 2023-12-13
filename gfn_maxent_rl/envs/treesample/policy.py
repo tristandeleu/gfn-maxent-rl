@@ -147,12 +147,18 @@ def f_network_mlp(num_categories):
         one_hots = jax.nn.one_hot(observations['variables'] + 1, num_categories + 1)
         one_hots = one_hots.reshape(batch_size, num_variables * (num_categories + 1))
 
-        f_values_continue = hk.nets.MLP(
+        outputs = hk.nets.MLP(
             (256, 256, output_size),
             activation=jax.nn.leaky_relu
         )(one_hots)
 
-        return jnp.squeeze(f_values_continue, axis=-1)
+        outputs = jnp.squeeze(outputs, axis=-1)
+        # Set the flow at terminating states to 0
+        # /!\ This is assuming that the terminal state is the *only* child of
+        # any terminating state, which is true for the TreeSample environments.
+        is_intermediate = jnp.any(observations['mask'], axis=-1)
+        outputs = jnp.where(is_intermediate, outputs, 0.)
+        return outputs
 
     return network
 
@@ -179,6 +185,12 @@ def f_network_transformer(num_categories):
         embeddings = embeddings.reshape(batch_size, num_variables * embed_dim)
         outputs = hk.Linear(output_size)(embeddings)
 
-        return jnp.squeeze(outputs, axis=-1)
+        outputs = jnp.squeeze(outputs, axis=-1)
+        # Set the flow at terminating states to 0
+        # /!\ This is assuming that the terminal state is the *only* child of
+        # any terminating state, which is true for the TreeSample environments.
+        is_intermediate = jnp.any(observations['mask'], axis=-1)
+        outputs = jnp.where(is_intermediate, outputs, 0.)
+        return outputs
 
     return network

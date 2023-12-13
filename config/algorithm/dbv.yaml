@@ -13,24 +13,19 @@ algorithm:
 
   policy_frequency: 0
 
-#policy_lr: 5e-6
-#
-#flow_lr: 1e-4
+policy_lr: 1e-4
 
-
-#optimizer:
-#  _target_: "gfn_maxent_rl.algos.detailed_balance_vanilla.DBVParameters"
-#
-#  policy:
-#    _target_: "optax.adam"
-#    learning_rate: ${policy_lr}
-#
-#  flow:
-#    _target_: "optax.adam"
-#    learning_rate: ${flow_lr}
+flow_lr: 1e-4
 
 optimizer:
-  _target_: "optax.adam"
-  learning_rate: ${lr}
+  _target_: "gfn_maxent_rl.algos.detailed_balance_vanilla.DBVParameters"
+
+  policy:
+    _target_: "optax.adam"
+    learning_rate: ${policy_lr}
+
+  flow:
+    _target_: "optax.adam"
+    learning_rate: ${flow_lr}
 
 exp_name_algorithm: "dbv"
