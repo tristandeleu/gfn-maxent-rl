@@ -29,6 +29,8 @@ class Transformer(hk.Module):
     def __call__(
             self,
             embeddings: jax.Array,  # [B, T, D]
+            rng=jax.random.PRNGKey(42),
+            use_dropout=False,
             # mask: jax.Array,  # [B, T]
     ) -> jax.Array:  # [B, T, D]
         """Transforms input embedding sequences to output embedding sequences."""
@@ -52,7 +54,8 @@ class Transformer(hk.Module):
             )
             h_norm = _layer_norm(h)
             h_attn = attn_block(h_norm, h_norm, h_norm)  # , mask=mask
-            # h_attn = hk.dropout(hk.next_rng_key(), self.dropout_rate, h_attn)
+            if use_dropout:
+                h_attn = hk.dropout(next(rng), self.dropout_rate, h_attn)
             h = h + h_attn
 
             # Then the dense block.
@@ -63,7 +66,8 @@ class Transformer(hk.Module):
             ])
             h_norm = _layer_norm(h)
             h_dense = dense_block(h_norm)
-            # h_dense = hk.dropout(hk.next_rng_key(), self.dropout_rate, h_dense)
+            if use_dropout:
+                h_dense = hk.dropout(next(rng), self.dropout_rate, h_dense)
             h = h + h_dense
 
         return _layer_norm(h)

@@ -22,14 +22,17 @@ env_wrapper:
 policy_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network_transformer"
   num_categories: ${env.num_categories}
+  use_dropout: False
 
 value_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.q_network_transformer"
   num_categories: ${env.num_categories}
+  use_dropout: False
 
 flow_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.f_network_transformer"
   num_categories: ${env.num_categories}
+  use_dropout: False
 
 
 exp_name_env: "treesample"

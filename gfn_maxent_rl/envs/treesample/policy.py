@@ -40,7 +40,7 @@ def action_mask(masks, num_categories):
     return jnp.concatenate((masks_continue, masks_stop), axis=1)
 
 
-def policy_network_mlp(num_categories):
+def policy_network_mlp(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_variables * num_categories
@@ -60,7 +60,7 @@ def policy_network_mlp(num_categories):
     return network
 
 
-def policy_network_transformer(num_categories):
+def policy_network_transformer(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_categories
@@ -77,7 +77,7 @@ def policy_network_transformer(num_categories):
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
+        embeddings = Transformer()(input_embeddings, use_dropout)
         logits = hk.Linear(output_size)(embeddings)
         logits = logits.reshape(batch_size, num_variables * num_categories)
 
@@ -87,7 +87,7 @@ def policy_network_transformer(num_categories):
     return network
 
 
-def q_network_mlp(num_categories):
+def q_network_mlp(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_variables * num_categories
@@ -109,7 +109,7 @@ def q_network_mlp(num_categories):
     return network
 
 
-def q_network_transformer(num_categories):
+def q_network_transformer(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = num_categories
@@ -126,7 +126,7 @@ def q_network_transformer(num_categories):
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
+        embeddings = Transformer()(input_embeddings, use_dropout)
         q_values_continue = hk.Linear(output_size)(embeddings)
         q_values_continue = q_values_continue.reshape(batch_size, num_variables * num_categories)  # [batch, num_variables * num_categories]
 
@@ -139,7 +139,7 @@ def q_network_transformer(num_categories):
     return network
 
 
-def f_network_mlp(num_categories):
+def f_network_mlp(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
@@ -163,7 +163,7 @@ def f_network_mlp(num_categories):
     return network
 
 
-def f_network_transformer(num_categories):
+def f_network_transformer(num_categories, use_dropout=False):
     def network(observations):
         batch_size, num_variables = observations['variables'].shape
         output_size = 1
@@ -181,7 +181,7 @@ def f_network_transformer(num_categories):
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
+        embeddings = Transformer()(input_embeddings, use_dropout)
         embeddings = embeddings.reshape(batch_size, num_variables * embed_dim)
         outputs = hk.Linear(output_size)(embeddings)
 
