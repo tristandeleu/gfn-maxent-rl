@@ -51,9 +51,10 @@ class FixedOrderingWrapper(gym.Wrapper):
 
 
 class RewardCorrection(gym.Wrapper):
-    def __init__(self, env, alpha=1.):
+    def __init__(self, env, alpha=1., weight='uniform_nonzero'):
         super().__init__(env)
         self.alpha = alpha  # Temperature parameter
+        self.weight = weight
         self._step = np.zeros((env.num_envs,), dtype=np.int_)
 
     def reset(self, *, seed=None, options=None):
@@ -63,9 +64,14 @@ class RewardCorrection(gym.Wrapper):
     def step(self, actions):
         observations, rewards, terminated, truncated, infos = self.env.step(actions)
 
-        # Correct the reward by subtracting log(t + 1), where t is the number
-        # of edges in the current graph
-        correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
+        if self.weight == 'all_steps':
+            correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
+        elif self.weight == 'uniform_nonzero':
+            correction = np.where(terminated | truncated | (rewards == 0.),
+                0., -math.lgamma(self.env.num_variables + 1) / self.env.num_variables)
+        else:
+            raise ValueError(f'Unknown weight: {self.weight}')
+
         rewards = rewards + self.alpha * correction
         self._step = (self._step + 1) % self.env.num_variables
 

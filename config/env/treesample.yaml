@@ -18,6 +18,7 @@ env:
 env_wrapper:
   _target_: "gfn_maxent_rl.envs.treesample.wrappers.RewardCorrection"
   alpha: 1.0
+  weight: uniform_nonzero
 
 policy_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network_transformer"
