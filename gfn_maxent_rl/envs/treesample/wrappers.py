@@ -65,7 +65,7 @@ class RewardCorrection(gym.Wrapper):
 
         # Correct the reward by subtracting log(t + 1), where t is the number
         # of edges in the current graph
-        correction = np.where(terminated | truncated, -np.log1p(self._step), 0.)
+        correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
         rewards = rewards + self.alpha * correction
         self._step = (self._step + 1) % self.env.num_variables
 
