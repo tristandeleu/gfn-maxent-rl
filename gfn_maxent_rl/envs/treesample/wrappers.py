@@ -51,7 +51,7 @@ class FixedOrderingWrapper(gym.Wrapper):
 
 
 class RewardCorrection(gym.Wrapper):
-    def __init__(self, env, alpha=1., weight='uniform_nonzero'):
+    def __init__(self, env, alpha=1., weight='nonzero'):
         super().__init__(env)
         self.alpha = alpha  # Temperature parameter
         self.weight = weight
@@ -66,9 +66,14 @@ class RewardCorrection(gym.Wrapper):
 
         if self.weight == 'all_steps':
             correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
-        elif self.weight == 'uniform_nonzero':
+        elif self.weight == 'nonzero':
+            if 'active_potentials' not in infos:
+                raise KeyError('Unavaiable key `active_potentials` in `infos` dict.')
+            num_active_potentials = np.sum(infos['active_potentials'], axis=1)
+            num_active_potentials = np.maximum(num_active_potentials, 1)
+
             correction = np.where(terminated | truncated | (rewards == 0.),
-                0., -math.lgamma(self.env.num_variables + 1) / self.env.num_variables)
+                0., -math.lgamma(self.env.num_variables + 1) / num_active_potentials)
         else:
             raise ValueError(f'Unknown weight: {self.weight}')
 
