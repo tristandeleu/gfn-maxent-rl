@@ -70,10 +70,14 @@ class RewardCorrection(gym.Wrapper):
             if 'active_potentials' not in infos:
                 raise KeyError('Unavaiable key `active_potentials` in `infos` dict.')
             num_active_potentials = np.sum(infos['active_potentials'], axis=1)
-            num_active_potentials = np.maximum(num_active_potentials, 1)
+            weight = num_active_potentials / len(self.env.potentials)
 
             correction = np.where(terminated | truncated | (rewards == 0.),
-                0., -math.lgamma(self.env.num_variables + 1) / num_active_potentials)
+                0., -math.lgamma(self.env.num_variables + 1) * weight)
+        elif self.weight == 'uniform':
+            total_correction = -math.lgamma(self.env.num_variables + 1)
+            correction = np.where(terminated | truncated,
+                0., total_correction / self.env.num_variables)
         else:
             raise ValueError(f'Unknown weight: {self.weight}')
 

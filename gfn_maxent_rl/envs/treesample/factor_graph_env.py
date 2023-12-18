@@ -62,20 +62,21 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         rewards = np.zeros((self.num_envs,), dtype=np.float_)
         active_potentials = np.zeros((self.num_envs, len(self.potentials)), dtype=np.bool_)
 
-        for i, (clique, potential) in enumerate(self.potentials):
-            # Check if the clique is active
-            is_in_clique = np.any(clique == indices[:, None], axis=1)
-            assignments = self._state[:, clique][~dones]
-            full_assignment = np.all(assignments != -1, axis=1)
-            is_active = np.logical_and(is_in_clique, full_assignment)
+        if len(indices) > 0:
+            for i, (clique, potential) in enumerate(self.potentials):
+                # Check if the clique is active
+                is_in_clique = np.any(clique == indices[:, None], axis=1)
+                assignments = self._state[:, clique][~dones]
+                full_assignment = np.all(assignments != -1, axis=1)
+                is_active = np.logical_and(is_in_clique, full_assignment)
 
-            # Get the codes for the assignments
-            base = self.num_categories ** np.arange(len(clique))
-            codes = np.sum(assignments[is_active] * base, axis=1)
+                # Get the codes for the assignments
+                base = self.num_categories ** np.arange(len(clique))
+                codes = np.sum(assignments[is_active] * base, axis=1)
 
-            # Add the new potential
-            rewards[is_active] += potential[codes]
-            active_potentials[:, i] = is_active
+                # Add the new potential
+                rewards[is_active] += potential[codes]
+                active_potentials[:, i] = is_active
 
         truncated = np.zeros((self.num_envs,), dtype=np.bool_)
         self._state[dones] = -1  # Clear state for complete trajectories
