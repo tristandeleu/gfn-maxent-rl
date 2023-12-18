@@ -51,9 +51,10 @@ class FixedOrderingWrapper(gym.Wrapper):
 
 
 class RewardCorrection(gym.Wrapper):
-    def __init__(self, env, alpha=1.):
+    def __init__(self, env, alpha=1., weight='nonzero'):
         super().__init__(env)
         self.alpha = alpha  # Temperature parameter
+        self.weight = weight
         self._step = np.zeros((env.num_envs,), dtype=np.int_)
 
     def reset(self, *, seed=None, options=None):
@@ -63,9 +64,23 @@ class RewardCorrection(gym.Wrapper):
     def step(self, actions):
         observations, rewards, terminated, truncated, infos = self.env.step(actions)
 
-        # Correct the reward by subtracting log(t + 1), where t is the number
-        # of edges in the current graph
-        correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
+        if self.weight == 'all_steps':
+            correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
+        elif self.weight == 'nonzero':
+            if 'active_potentials' not in infos:
+                raise KeyError('Unavaiable key `active_potentials` in `infos` dict.')
+            num_active_potentials = np.sum(infos['active_potentials'], axis=1)
+            weight = num_active_potentials / len(self.env.potentials)
+
+            correction = np.where(terminated | truncated | (rewards == 0.),
+                0., -math.lgamma(self.env.num_variables + 1) * weight)
+        elif self.weight == 'uniform':
+            total_correction = -math.lgamma(self.env.num_variables + 1)
+            correction = np.where(terminated | truncated,
+                0., total_correction / self.env.num_variables)
+        else:
+            raise ValueError(f'Unknown weight: {self.weight}')
+
         rewards = rewards + self.alpha * correction
         self._step = (self._step + 1) % self.env.num_variables
 
