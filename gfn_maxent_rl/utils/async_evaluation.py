@@ -7,6 +7,7 @@ from collections import defaultdict
 
 from gfn_maxent_rl.utils.exhaustive import compute_cache, push_source_flow_to_terminating_states
 from gfn_maxent_rl.utils.metrics import jensen_shannon_divergence, entropy
+from gfn_maxent_rl.envs.errors import StatesEnumerationError
 
 
 class AsyncEvaluator:
@@ -28,17 +29,20 @@ class AsyncEvaluator:
         self._process.start()
 
     def enqueue(self, params, state, step, batch_size=256):
-        # Compute the cache
-        cache = compute_cache(
-            self.env,
-            self._log_policy,
-            params,
-            state,
-            batch_size=batch_size
-        )
+        try:
+            # Compute the cache
+            cache = compute_cache(
+                self.env,
+                self._log_policy,
+                params,
+                state,
+                batch_size=batch_size
+            )
 
-        # Add the cache & step to the queue for processing
-        self._queue.put((step, cache))
+            # Add the cache & step to the queue for processing
+            self._queue.put((step, cache))
+        except StatesEnumerationError:
+            pass
 
     def join(self):
         self._queue.put(None)

@@ -15,6 +15,7 @@ from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, entropy
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 from gfn_maxent_rl.utils.evaluations import evaluation
+from gfn_maxent_rl.envs.errors import StatesEnumerationError
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -77,10 +78,12 @@ def main(config):
         transition_begin=config.prefill,
     ))
 
-    target = {
-        'log_probs': exact_log_posterior(env, batch_size=config.batch_size)
-    }
-    wandb.summary['target/entropy'] = entropy(target['log_probs'])
+    target = {}
+    try:
+        target['log_probs'] = exact_log_posterior(env, batch_size=config.batch_size)
+        wandb.summary['target/entropy'] = entropy(target['log_probs'])
+    except StatesEnumerationError:
+        pass
     evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target=target)
 
     observations, _ = env.reset()
