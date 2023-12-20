@@ -137,7 +137,7 @@ def main(config):
                     'loss/critic': logs['critic_loss'].mean().item() if ('critic_loss' in logs) else 0.,
                 })
 
-    evaluator.join()
+    metrics = evaluator.join()
 
 
 if __name__ == '__main__':

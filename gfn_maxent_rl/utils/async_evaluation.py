@@ -20,10 +20,14 @@ class AsyncEvaluator:
 
         self._log_policy = jax.jit(algorithm.log_policy)
 
-        self._queue = self.ctx.Queue()
+        self._manager = self.ctx.Manager()
+        self._queue = self._manager.Queue()
+        self._namespace = self._manager.Namespace()
+        self._namespace.step = -1
+        self._namespace.metrics = self._manager.dict()
         self._process = self.ctx.Process(
             target=AsyncEvaluator._compute_metrics,
-            args=(self._queue, env, target, self.run),
+            args=(self._queue, self._namespace, env, target, self.run),
             daemon=True
         )
         self._process.start()
@@ -48,8 +52,12 @@ class AsyncEvaluator:
         self._queue.put(None)
         self._process.join()
 
+        results = dict(self._namespace.metrics)
+        results['_step'] = self._namespace.step
+        return results
+
     @staticmethod
-    def _compute_metrics(queue, env, target, run):
+    def _compute_metrics(queue, namespace, env, target, run):
         terminate = False
         while not terminate:
             # Create the batch of caches
@@ -96,9 +104,15 @@ class AsyncEvaluator:
                         'entropy': entropy(distribution),
                     }
 
-                # Send to Wandb
-                if run is not None:
-                    for step, metric in metrics.items():
+                for step, metric in metrics.items():
+                    # Save the metrics of the latest step
+                    if step > namespace.step:
+                        namespace.step = step
+                        for key, value in metric.items():
+                            namespace.metrics[key] = value
+
+                    # Send to Wandb
+                    if run is not None:
                         run.log({
                             **{f'metrics/{key}': value for (key, value) in metric.items()},
                             'metrics/step': step
