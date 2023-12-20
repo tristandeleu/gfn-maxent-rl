@@ -7,6 +7,7 @@ from gym.spaces import Dict, Box, Discrete, MultiBinary
 from itertools import product, chain
 
 from gfn_maxent_rl.envs.treesample.policy import uniform_log_policy, action_mask
+from gfn_maxent_rl.envs.errors import StatesEnumerationError
 
 
 class FactorGraphEnvironment(gym.vector.VectorEnv):
@@ -136,6 +137,12 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
     def all_states_batch_iterator(self, batch_size, terminating=False):
         num_states = (self.num_categories + 1) ** self.num_variables
 
+        if num_states > 1e5:
+            raise StatesEnumerationError('Impossible to enumerate all the '
+                f'states for `num_categories = {self.num_categories}` & '
+                f'`num_variables = {self.num_variables} (the number of states '
+                f'= {num_states} > 100k).')
+
         if self._all_states is None:
             iterator = product(range(-1, self.num_categories), repeat=self.num_variables)
             self._all_keys = list(iterator)
@@ -180,6 +187,14 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
     @property
     def mdp_state_graph(self):
+        num_states = (self.num_categories + 1) ** self.num_variables
+
+        if num_states > 1e5:
+            raise StatesEnumerationError('Impossible to enumerate all the '
+                f'states for `num_categories = {self.num_categories}` & '
+                f'`num_variables = {self.num_variables} (the number of states '
+                f'= {num_states} > 100k).')
+
         if self._state_graph is None:
             states = list(product(range(-1, self.num_categories), repeat=self.num_variables))
             terminating_states = product(range(self.num_categories), repeat=self.num_variables)

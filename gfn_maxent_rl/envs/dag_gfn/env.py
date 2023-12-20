@@ -9,6 +9,7 @@ from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequen
 from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy, action_mask
 from gfn_maxent_rl.envs.dag_gfn.utils.exhaustive import get_all_dags_compressed, get_all_dags_keys
 from gfn_maxent_rl.envs.dag_gfn.utils.graphs import compute_masks
+from gfn_maxent_rl.envs.errors import StatesEnumerationError
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -144,6 +145,10 @@ class DAGEnvironment(gym.vector.VectorEnv):
     # Method for evaluation
 
     def all_states_batch_iterator(self, batch_size, terminating=False):
+        if self.num_variables > 5:
+            raise StatesEnumerationError('Impossible to enumerate all the '
+                'states for `num_variables > 5`.')
+
         if self._all_dags_compressed is None:
             self._all_dags_compressed = get_all_dags_compressed(self.num_variables)
             self._all_dags_keys = get_all_dags_keys(
@@ -173,6 +178,10 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     @property
     def mdp_state_graph(self):
+        if self.num_variables > 5:
+            raise StatesEnumerationError('Impossible to enumerate all the '
+                'states for `num_variables > 5`.')
+
         if self._state_graph is None:
             edges = []
             for keys, observations in self.all_states_batch_iterator(batch_size=512):
