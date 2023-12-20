@@ -196,3 +196,6 @@ class DAGEnvironment(gym.vector.VectorEnv):
             self._state_graph.add_edges_from(edges)
 
         return self._state_graph
+
+    def observation_to_key(self, observation):
+        return frozenset(zip(*np.nonzero(observation['adjacency'])))
