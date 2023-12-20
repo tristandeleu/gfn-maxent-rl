@@ -60,14 +60,5 @@ class ReplayBuffer:
     def __len__(self):
         return self.capacity if self._is_full else self._index
 
-    def encode(self, decoded):
-        encoded = decoded.reshape(-1, self.num_variables ** 2)
-        return np.packbits(encoded.astype(np.int32), axis=1)
-
-    def decode(self, encoded, dtype=np.float32):
-        decoded = np.unpackbits(encoded, axis=-1, count=self.num_variables ** 2)
-        decoded = decoded.reshape(*encoded.shape[:-1], self.num_variables, self.num_variables)
-        return decoded.astype(dtype)
-
     def can_sample(self, batch_size):
         return len(self) >= batch_size
