@@ -137,6 +137,13 @@ def main(config):
                     'loss/critic': logs['critic_loss'].mean().item() if ('critic_loss' in logs) else 0.,
                 })
 
+    # Evaluate the final model
+    evaluator.enqueue(
+        params.online,
+        state.network,
+        config.num_iterations,
+        batch_size=config.batch_size
+    )
     metrics = evaluator.join()
 
 
