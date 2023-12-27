@@ -3,8 +3,6 @@ import gym
 import jax.numpy as jnp
 import math
 
-from gym.spaces import MultiDiscrete
-
 from gfn_maxent_rl.envs.treesample.factor_graph_env import FactorGraphEnvironment
 
 
@@ -12,76 +10,56 @@ class FixedOrderingWrapper(gym.Wrapper):
     def __init__(self, env):
         assert isinstance(env, FactorGraphEnvironment)
         super().__init__(env)
+        self._permutation = np.append(self.env.permutation, -1)
 
-        self.action_space = MultiDiscrete([env.num_categories] * env.num_envs)
-        self._index = np.zeros((env.num_envs,), dtype=np.int_)
+    def observations(self):
+        # The number of steps from the initial state
+        steps = np.sum(self.env._state != -1, axis=1)
+        # The index of the variable from the "permutation" array. If this is a
+        # terminating transition (i.e., all the variables are set), then return -1
+        variables = self._permutation[steps]
+        # Repeated indices, e.g. [0, 0, 1, 1, 2, 2, 3, 3]
+        indices = np.repeat(np.arange(self.env.num_variables), self.env.num_categories)
 
-    def reset(self, *, seed=None, options=None):
-        self._index[:] = 0
-        return super().reset(seed=seed, options=options)
-
-    def step(self, values):
-        variables = self.env.permutation[self._index]
-        actions = variables * self.env.num_categories + values
-        self._index = (self._index + 1) % self.env.num_variables
-        return super().step(actions)
-
-    # Method to interact with the algorithm (uniform sampling of action)
-
-    def uniform_log_policy(self, observations):
-        masks = self.action_mask(observations)
-        return jnp.where(masks, -math.log(self.num_categories), -jnp.inf)
+        return {
+            'variables': np.copy(self.env._state),
+            'mask': (indices == variables[:, None]).astype(np.int_)
+        }
 
     def num_parents(self, observations):
-        batch_size = observations.shape[0]
-        return jnp.ones((batch_size,), dtype=jnp.int32)
-
-    def action_mask(self, observations):
-        shape = (
-            observations['mask'].shape[0],
-            self.env.num_variables * self.env.num_categories
-        )
-        log_pi = jnp.zeros(shape, dtype=jnp.bool_)
-        slice_ = slice(
-            self._index * self.env.num_categories,
-            (self._index + 1) * self.env.num_categories
-        )
-        log_pi = log_pi.at[:, slice_].set(True)
-        return log_pi
+        return jnp.ones((observations.shape[0],), dtype=jnp.int32)
 
 
 class RewardCorrection(gym.Wrapper):
-    def __init__(self, env, alpha=1., weight='nonzero'):
+    def __init__(self, env, alpha=1., weight='all_steps'):
         super().__init__(env)
         self.alpha = alpha  # Temperature parameter
         self.weight = weight
-        self._step = np.zeros((env.num_envs,), dtype=np.int_)
-
-    def reset(self, *, seed=None, options=None):
-        self._step[:] = 0
-        return super().reset(seed=seed, options=options)
 
     def step(self, actions):
         observations, rewards, terminated, truncated, infos = self.env.step(actions)
 
         if self.weight == 'all_steps':
-            correction = np.where(terminated | truncated, 0., -np.log1p(self._step))
+            # num_steps = number of steps to the *next observation*
+            num_steps = np.sum(observations['variables'] != -1, axis=1)
+            correction = np.where(terminated | truncated, 0., -np.log(num_steps))
+
         elif self.weight == 'nonzero':
             if 'active_potentials' not in infos:
                 raise KeyError('Unavaiable key `active_potentials` in `infos` dict.')
-            num_active_potentials = np.sum(infos['active_potentials'], axis=1)
-            weight = num_active_potentials / len(self.env.potentials)
 
+            weight = np.mean(infos['active_potentials'], axis=1)
             correction = np.where(terminated | truncated | (rewards == 0.),
                 0., -math.lgamma(self.env.num_variables + 1) * weight)
+
         elif self.weight == 'uniform':
             total_correction = -math.lgamma(self.env.num_variables + 1)
             correction = np.where(terminated | truncated,
                 0., total_correction / self.env.num_variables)
+
         else:
             raise ValueError(f'Unknown weight: {self.weight}')
 
         rewards = rewards + self.alpha * correction
-        self._step = (self._step + 1) % self.env.num_variables
-
+        infos['correction'] = correction
         return (observations, rewards, terminated, truncated, infos)
