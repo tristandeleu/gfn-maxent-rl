@@ -15,6 +15,8 @@ JOBID=$(sbatch --partition long \
 
 # Upload the runs to wandb once all the jobs have terminated
 sbatch --partition main-cpu \
+    --job-name $JOBID.upload \
     --output $OUTPUT_DIR/slurm/slurm-%j.out \
     --dependency afterok:$JOBID \
+    --kill-on-invalid-dep yes \
     scripts/final/run_after.sh $OUTPUT_DIR/jobs/$JOBID
