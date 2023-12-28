@@ -42,6 +42,7 @@ class RewardCorrection(gym.Wrapper):
         if self.weight == 'all_steps':
             # num_steps = number of steps to the *next observation*
             num_steps = np.sum(observations['variables'] != -1, axis=1)
+            num_steps = np.maximum(num_steps, 1)  # Avoid log(0)
             correction = np.where(terminated | truncated, 0., -np.log(num_steps))
 
         elif self.weight == 'nonzero':
