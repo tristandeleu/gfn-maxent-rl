@@ -1,23 +1,16 @@
 import numpy as np
 import gym
+import math
+import operator as op
 
 from gym.spaces import Space, Dict, Box, Discrete
+from functools import reduce
 
 from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree
+from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
+from gfn_maxent_rl.envs.phylo_gfn.policy import uniform_log_policy, action_mask
+from gfn_maxent_rl.envs.errors import StatesEnumerationError
 
-
-CHARACTERS_MAPS = {
-    'DNA': {'A': 0b1000, 'C': 0b0100, 'G': 0b0010, 'T': 0b0001, 'N': 0b1111},
-    'RNA': {'A': 0b1000, 'C': 0b0100, 'G': 0b0010, 'U': 0b0001, 'N': 0b1111},
-    'DNA_WITH_GAP': {
-        'A': 0b10000, 'C': 0b01000, 'G': 0b00100, 'T': 0b00010,
-        '-': 0b00001, 'N': 0b11110
-    },
-    'RNA_WITH_GAP': {
-        'A': 0b10000, 'C': 0b01000, 'G': 0b00100, 'U': 0b00010,
-        '-': 0b00001, 'N': 0b11110
-    }
-}
 
 class RootedTreeSpace(Space[RootedTree]):
     def contains(self, x):
@@ -25,25 +18,23 @@ class RootedTreeSpace(Space[RootedTree]):
 
 
 class PhyloTreeEnvironment(gym.vector.VectorEnv):
-    def __init__(self, num_envs, sequences, sequence_type='DNA', C=0., scale=1.):
+    def __init__(self, num_envs, sequences, reward, sequence_type='DNA'):
         char_dict = CHARACTERS_MAPS[sequence_type]
         self.sequences = np.array([[char_dict[c] for c in sequence]
             for sequence in sequences.values()], dtype=np.int_)
         num_nodes, sequence_length = self.sequences.shape
         assert num_nodes > 1
 
+        self.reward = reward
         self.sequence_type = sequence_type
-        self.C = C
-        self.scale = scale
         self._state = None
         self._lefts, self._rights = np.triu_indices(num_nodes, k=1)
-        self._reward_offset = (C / scale) / num_nodes
 
         max_actions = num_nodes * (num_nodes - 1) // 2
         observation_space = Dict({
             'sequences': Box(low=0., high=1.,
                 shape=(num_nodes, sequence_length, 5), dtype=np.float32),
-            'length': Box(low=1, high=num_nodes, shape=(), dtype=np.int_),
+            'type': Box(low=0, high=2, shape=(num_nodes,), dtype=np.int_),
             'tree': RootedTreeSpace(),
             'mask': Box(low=0., high=1., shape=(max_actions,), dtype=np.float32),
         })
@@ -88,7 +79,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
                 # Intermediate log-reward: the sum of intermediate log-reward
                 # is: (C - total_mutations) / scale
-                rewards[i] = self._reward_offset - trees[left].mutations / self.scale
+                rewards[i] = self.reward.delta_score(trees[left])
 
                 # The "right" tree is no longer valid for merging
                 self._state['masks'][i, self._lefts == right] = False
@@ -111,8 +102,8 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             'sequences': sequences,  # (num_envs, num_nodes, sequence_length, 5)
 
             # The number of valid trees in the "sequences" (among the "num_nodes")
-            'length': np.array([len([tree is not None for tree in trees])
-                for trees in self._state['trees']], dtype=np.int_),  # (num_envs,)
+            'type': np.array([[get_tree_type(tree) for tree in trees]
+                for trees in self._state['trees']], dtype=np.int_),  # (num_envs, num_nodes)
 
             # Only returning "trees[0]" because at the terminating state,
             # the final tree will be in trees[0], and this key will only be
@@ -122,11 +113,90 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             # The mask for the valid actions: (num_envs, num_nodes * (num_nodes - 1) // 2)
             'mask': np.copy(self._state['masks']).astype(np.float32)
         }
+    
+    # Properties & methods to interact with the replay buffer
+
+    @property
+    def observation_dtype(self):
+        num_nodes, sequence_length = self.sequences.shape
+        nbytes_seq = math.ceil((num_nodes * sequence_length * 5) / 8)
+        nbytes_mask = math.ceil((self.single_action_space.n - 1) / 8)  # num_nodes * (num_nodes - 1) // 2
+        return np.dtype([
+            ('sequences', np.uint8, (nbytes_seq,)),
+            ('type', np.int_, (num_nodes,)),
+            ('mask', np.uint8, (nbytes_mask,)),
+        ])
+
+    @property
+    def max_length(self):
+        return self.sequences.shape[0] + 1
+
+    def encode(self, observations):
+        batch_size = observations['sequences'].shape[0]
+
+        def _encode(decoded):
+            encoded = decoded.reshape(batch_size, -1)
+            return np.packbits(encoded.astype(np.int32), axis=1)
+
+        encoded = np.empty((batch_size,), dtype=self.observation_dtype)
+        encoded['sequences'] = _encode(observations['sequences'])
+        encoded['type'] = observations['type']
+        encoded['mask'] = _encode(observations['mask'])
+        return encoded
+
+    def _decode(self, encoded, shape):
+        count = reduce(op.mul, shape, 1)
+        decoded = np.unpackbits(encoded, axis=-1, count=count)
+        decoded = decoded.reshape(*encoded.shape[:-1], *shape)
+        return decoded.astype(np.float32)
+
+    def decode(self, observations):
+        return {
+            'sequences': self._decode(observations['sequences'],
+                self.single_observation_space['sequences'].shape),
+            'type': observations['type'],
+            'mask': self._decode(observations['mask'],
+                self.single_observation_space['mask'].shape)
+        }
+
+    def decode_sequence(self, samples):
+        return self.decode(samples['observations'])
+
+    # Method to interact with the algorithm (uniform sampling of action)
+
+    def uniform_log_policy(self, observations):
+        return uniform_log_policy(observations['mask'])
+
+    def num_parents(self, observations):
+        # Elements with type "2" correspond to rooted trees. The number
+        # of parents is the number of rooted trees (not leaves).
+        return np.sum(observations['type'] == 2, axis=-1)
+
+    def action_mask(self, observations):
+        return action_mask(observations['mask'])
+
+    # Method for evaluation
+
+    def all_states_batch_iterator(self, batch_size, terminating=False):
+        raise StatesEnumerationError('Impossible to enumerate all the '
+            'states of `PhyloTreeEnvironment`.')
+
+    def log_reward(self, observations):
+        return self.reward.log_reward(observations['tree'])
+
+    @property
+    def mdp_state_graph(self):
+        raise StatesEnumerationError('Impossible to enumerate all the '
+            'states of `PhyloTreeEnvironment`.')
+
+    def observation_to_key(self, observation):
+        raise observation['tree']
 
 
 if __name__ == '__main__':
     from numpy.random import default_rng
     import json
+    from gfn_maxent_rl.envs.phylo_gfn.rewards import ExponentialReward
 
     def random_actions(observations, rng=default_rng()):
         # Get the action mask from the mask returned by the observations
@@ -147,7 +217,13 @@ if __name__ == '__main__':
     rng = default_rng(1)
     with open('gfn_maxent_rl/envs/phylo_gfn/datasets/DS1.json', 'r') as f:
         sequences = json.load(f)
-    env = PhyloTreeEnvironment(num_envs=1, sequences=sequences, sequence_type='DNA_WITH_GAP')
+    reward = ExponentialReward(num_nodes=len(sequences))
+    env = PhyloTreeEnvironment(
+        num_envs=1,
+        sequences=sequences,
+        reward=reward,
+        sequence_type='DNA_WITH_GAP'
+    )
     dones = np.zeros((env.num_envs,), dtype=np.bool_)
 
     observations, _ = env.reset()
