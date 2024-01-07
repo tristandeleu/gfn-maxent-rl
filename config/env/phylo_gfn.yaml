@@ -1,0 +1,25 @@
+# @package _global_
+
+env:
+  _target_: "gfn_maxent_rl.envs.phylo_gfn.factories.get_phylo_gfn_env"
+
+  # Dataset name
+  dataset_name: "DS1"
+
+env_wrapper:
+  _target_: "gfn_maxent_rl.envs.phylo_gfn.wrappers.RewardCorrection"
+  alpha: 1.0
+
+policy_network:
+  _target_: "hydra.utils.get_method"
+  path: ""
+
+value_network:
+  _target_: "hydra.utils.get_method"
+  path: ""
+
+flow_network:
+  _target_: "hydra.utils.get_method"
+  path: ""
+
+exp_name_env: "phylo_gfn"
