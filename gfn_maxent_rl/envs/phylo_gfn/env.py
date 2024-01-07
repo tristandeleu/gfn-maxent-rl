@@ -52,6 +52,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
     def reset(self, *, seed=None, options=None):
         max_actions = self.single_action_space.n - 1
+        # Initialize the state with only leaves and all the actions being valid
         self._state = {
             'trees': [[Leaf(index=n, sequence=seq)
                 for (n, seq) in enumerate(self.sequences)]
@@ -106,13 +107,19 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
                 sequences[i, j] = ((tree.sequence[:, None] & (1 << np.arange(5))) > 0)
 
         return {
-            'sequences': sequences,
+            # The Fitch features of each tree
+            'sequences': sequences,  # (num_envs, num_nodes, sequence_length, 5)
+
+            # The number of valid trees in the "sequences" (among the "num_nodes")
             'length': np.array([len([tree is not None for tree in trees])
-                for trees in self._state['trees']], dtype=np.int_),
+                for trees in self._state['trees']], dtype=np.int_),  # (num_envs,)
+
             # Only returning "trees[0]" because at the terminating state,
             # the final tree will be in trees[0], and this key will only be
             # useful when sampling at test time.
             'tree': tuple(trees[0] for trees in self._state['trees']),
+
+            # The mask for the valid actions: (num_envs, num_nodes * (num_nodes - 1) // 2)
             'mask': np.copy(self._state['masks']).astype(np.float32)
         }
 
