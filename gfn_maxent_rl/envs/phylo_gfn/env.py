@@ -190,7 +190,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             'states of `PhyloTreeEnvironment`.')
 
     def observation_to_key(self, observation):
-        raise observation['tree']
+        return observation['tree']
 
 
 if __name__ == '__main__':
