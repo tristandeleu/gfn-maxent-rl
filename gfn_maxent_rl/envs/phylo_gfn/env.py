@@ -170,7 +170,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
     def num_parents(self, observations):
         # Elements with type "2" correspond to rooted trees. The number
         # of parents is the number of rooted trees (not leaves).
-        return np.sum(observations['type'] == 2, axis=-1)
+        return (observations['type'] == 2).sum(axis=-1)
 
     def action_mask(self, observations):
         return action_mask(observations['mask'])
