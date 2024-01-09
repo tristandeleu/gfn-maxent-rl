@@ -137,7 +137,7 @@ class DAGEnvironment(gym.vector.VectorEnv):
         return uniform_log_policy(observations['mask'])
 
     def num_parents(self, observations):
-        return observations['graph'].n_edge[:-1]  # [:-1] -> Remove padding
+        return observations['graph'].n_edge[..., :-1]  # [:-1] -> Remove padding
 
     def action_mask(self, observations):
         return action_mask(observations['mask'])

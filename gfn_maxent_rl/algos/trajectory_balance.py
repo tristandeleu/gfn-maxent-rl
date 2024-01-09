@@ -27,7 +27,10 @@ class GFNTrajectoryBalance(GFNBaseAlgorithm):
         log_pF = jnp.sum(log_pF, axis=(1, 2))
 
         # Compute the backward log-probabilities (fixed P_B)
-        log_pB = -jax.lax.lgamma(samples['lengths'] + 1.)  # -log(n!)
+        num_parents = self.env.num_parents(samples['observations'])
+        # Default to 0 for log p_B if num_parents == 0 (e.g., padding)
+        num_parents = jnp.maximum(num_parents, 1)
+        log_pB = -jnp.sum(jnp.log(num_parents), axis=-1)
 
         # Compute the log-rewards, based on the delta-scores
         log_rewards = jnp.where(seq_masks, samples['rewards'], 0.)
