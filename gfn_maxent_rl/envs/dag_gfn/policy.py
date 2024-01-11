@@ -67,3 +67,12 @@ def q_network(observations):
     q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values.dtype)
 
     return jnp.concatenate((q_values, q_value_stop), axis=-1)
+
+
+def f_network(observations):
+    features = GNNBackbone(num_layers=1, name='gnn')(
+        observations['graph'], observations['mask'])
+
+    outputs = hk.nets.MLP([128, 1], name='flow')(features.globals)
+
+    return jnp.squeeze(outputs, axis=-1)
