@@ -10,6 +10,7 @@ from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy, action_mask
 from gfn_maxent_rl.envs.dag_gfn.utils.exhaustive import get_all_dags_compressed, get_all_dags_keys
 from gfn_maxent_rl.envs.dag_gfn.utils.graphs import compute_masks
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.envs.dag_gfn.functional import reset, step, state_to_observation
 
 
 class DAGEnvironment(gym.vector.VectorEnv):
@@ -199,3 +200,14 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     def observation_to_key(self, observation):
         return frozenset(zip(*np.nonzero(observation['adjacency'])))
+
+    # Functional API
+
+    def func_reset(self, batch_size):
+        return reset(batch_size, self.num_variables)
+
+    def func_step(self, states, actions):
+        return step(states, actions)
+    
+    def func_state_to_observation(self, states, trajectories):
+        return state_to_observation(states, trajectories)
