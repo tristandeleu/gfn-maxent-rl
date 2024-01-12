@@ -29,12 +29,13 @@ class Transformer(hk.Module):
     def __call__(
             self,
             embeddings: jax.Array,  # [B, T, D]
-            # mask: jax.Array,  # [B, T]
+            mask=None,  # [B, T]
     ) -> jax.Array:  # [B, T, D]
         """Transforms input embedding sequences to output embedding sequences."""
 
         initializer = hk.initializers.VarianceScaling(2 / self.num_layers)
-        _, seq_len, model_size = embeddings.shape
+        # _, seq_len, model_size = embeddings.shape
+        model_size = embeddings.shape[-1]
 
         # Compute causal mask for autoregressive sequence modelling.
         # mask = mask[:, None, None, :]  # [B, H=1, T'=1, T]
@@ -51,7 +52,13 @@ class Transformer(hk.Module):
                 w_init=initializer,
             )
             h_norm = _layer_norm(h)
-            h_attn = attn_block(h_norm, h_norm, h_norm)  # , mask=mask
+
+            if mask is not None:
+                h_attn = attn_block(h_norm, h_norm, h_norm, mask=mask[:, None, None, :])
+            elif mask is None:
+                h_attn = attn_block(h_norm, h_norm, h_norm)  # , mask=mask
+            else:
+                raise ValueError("mask should be None or a boolean array")
             # h_attn = hk.dropout(hk.next_rng_key(), self.dropout_rate, h_attn)
             h = h + h_attn
 
