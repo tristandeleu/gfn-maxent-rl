@@ -91,7 +91,6 @@ def main(config):
     with trange(config.prefill + config.num_iterations) as pbar:
         for iteration in pbar:
             epsilon = exploration_schedule(iteration)
-
             # Sample actions from the model (with exploration)
             actions, key, logs = algorithm.act(
                 params.online, state.network, key, observations, epsilon)

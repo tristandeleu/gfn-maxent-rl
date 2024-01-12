@@ -108,7 +108,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             # Only returning "trees[0]" because at the terminating state,
             # the final tree will be in trees[0], and this key will only be
             # useful when sampling at test time.
-            'tree': tuple(trees[0] for trees in self._state['trees']),
+            # 'tree': tuple(trees[0] for trees in self._state['trees']),
 
             # The mask for the valid actions: (num_envs, num_nodes * (num_nodes - 1) // 2)
             'mask': np.copy(self._state['masks']).astype(np.float32)

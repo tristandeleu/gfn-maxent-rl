@@ -73,8 +73,7 @@ def policy_network_mlp(num_categories):
 
 def policy_network_transformer(num_categories):
     def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape # [batch, num_nodes, sequence_length, 5]
-        output_size = num_categories
+        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
 
         input = observations['sequences'].reshape(batch_size, num_nodes, -1)
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
@@ -88,11 +87,8 @@ def policy_network_transformer(num_categories):
             activation=jax.nn.leaky_relu
         )(input)
 
-        # token_embeddings = token_embeddings.reshape(batch_size, num_nodes, sequence_length * 1)
-
         # padding mask
-        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32) #TODO: use it later in Transformer
-
+        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
 
         positional_embeddings = hk.get_parameter(
             'positional_embeddings', [27, 128], init=embed_init)
@@ -108,7 +104,6 @@ def policy_network_transformer(num_categories):
         row, col = jnp.triu_indices(num_nodes, k=1)
         encodings_combination = encoding[:, row] + encoding[:, col]
 
-
         # Tree topology MLP
         logits = hk.nets.MLP(
             (256, 256, 1),
@@ -118,7 +113,6 @@ def policy_network_transformer(num_categories):
 
         # tree_topology = jax.nn.log_softmax(tree_topology, axis=-1)
 
-
         # # Edge lengths MLP
         # edge_lengths = hk.nets.MLP(
         #     (256, 256, output_size),
@@ -127,7 +121,6 @@ def policy_network_transformer(num_categories):
         # edge_lengths = jax.nn.log_softmax(edge_lengths, axis=-1)
 
         norm = hk.get_state('normalization', (), init=jnp.ones)
-        # import pdb; pdb.set_trace()
         return log_policy(logits * norm, observations['mask'])
 
     return network
@@ -157,24 +150,46 @@ def q_network_mlp(num_categories):
 
 def q_network_transformer(num_categories):
     def network(observations):
-        batch_size, num_variables = observations['variables'].shape
-        output_size = num_categories
+        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+        # output_size = num_categories
 
+        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
-        token_embeddings = hk.Embed(
-            num_categories + 1,
-            embed_dim=256,
-            w_init=embed_init
-        )(observations['variables'] + 1)
+        # token_embeddings = hk.Embed(
+        #     num_categories + 1,
+        #     embed_dim=256,
+        #     w_init=embed_init
+        # )(observations['variables'] + 1)
+        token_embeddings = hk.nets.MLP(
+            (256, 128),
+            activation=jax.nn.leaky_relu
+        )(input)
+
+        # padding mask
+        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [num_variables, 256], init=embed_init)
+            'positional_embeddings', [27, 128], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
-        q_values_continue = hk.Linear(output_size)(embeddings)
-        q_values_continue = q_values_continue.reshape(batch_size, num_variables * num_categories)  # [batch, num_variables * num_categories]
+        encoding = Transformer()(input_embeddings, batch_padding_mask)
+
+        # Pairwise combination
+        row, col = jnp.triu_indices(num_nodes, k=1)
+        encodings_combination = encoding[:, row] + encoding[:, col]
+
+        # Tree topology MLP
+        logits = hk.nets.MLP(
+            (256, 256, 1),
+            activation=jax.nn.leaky_relu
+        )(encodings_combination)
+        q_values_continue = jnp.squeeze(logits, axis=-1)
+
+
+        # q_values_continue = hk.Linear(output_size)(encoding)
+        # q_values_continue = q_values_continue.reshape(batch_size, num_variables * num_categories)  # [batch, num_variables * num_categories]
+
 
         # Value of the stop action is 0
         q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
@@ -211,25 +226,33 @@ def f_network_mlp(num_categories):
 
 def f_network_transformer(num_categories):
     def network(observations):
-        batch_size, num_variables = observations['variables'].shape
+        batch_size, num_variables, sequence_length, _ = observations['sequences'].shape
         output_size = 1
-        embed_dim = 256
+        # embed_dim = 256
 
+        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
         embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
-        token_embeddings = hk.Embed(
-            num_categories + 1,
-            embed_dim=embed_dim,
-            w_init=embed_init
-        )(observations['variables'] + 1)
+        # token_embeddings = hk.Embed(
+        #     num_categories + 1,
+        #     embed_dim=embed_dim,
+        #     w_init=embed_init
+        # )(observations['variables'] + 1)
+        token_embeddings = hk.nets.MLP(
+            (256, 128),
+            activation=jax.nn.leaky_relu
+        )(input)
+
+        # padding mask
+        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
 
         positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [num_variables, embed_dim], init=embed_init)
+            'positional_embeddings', [27, 128], init=embed_init)
 
         input_embeddings = token_embeddings + positional_embeddings
 
-        embeddings = Transformer()(input_embeddings)
-        embeddings = embeddings.reshape(batch_size, num_variables * embed_dim)
-        outputs = hk.Linear(output_size)(embeddings)
+        encoding = Transformer()(input_embeddings, batch_padding_mask)
+        encoding = encoding.reshape(batch_size, num_nodes * 128)
+        outputs = hk.Linear(output_size)(encoding)
 
         outputs = jnp.squeeze(outputs, axis=-1)
         # Set the flow at terminating states to 0
