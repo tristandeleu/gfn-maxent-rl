@@ -3,18 +3,13 @@ import gym
 import math
 import operator as op
 
-from gym.spaces import Space, Dict, Box, Discrete
+from gym.spaces import Dict, Box, Discrete
 from functools import reduce
 
 from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree
 from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
 from gfn_maxent_rl.envs.phylo_gfn.policy import uniform_log_policy, action_mask
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
-
-
-class RootedTreeSpace(Space[RootedTree]):
-    def contains(self, x):
-        return isinstance(x, (RootedTree, Leaf))
 
 
 class PhyloTreeEnvironment(gym.vector.VectorEnv):
@@ -35,7 +30,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             'sequences': Box(low=0., high=1.,
                 shape=(num_nodes, sequence_length, 5), dtype=np.float32),
             'type': Box(low=0, high=2, shape=(num_nodes,), dtype=np.int_),
-            'tree': RootedTreeSpace(),
+            'tree': Box(low=-2, high=num_nodes, shape=(2 * num_nodes - 1,), dtype=np.int_),
             'mask': Box(low=0., high=1., shape=(max_actions,), dtype=np.float32),
         })
         action_space = Discrete(max_actions + 1)
@@ -89,13 +84,18 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
     def observations(self):
         # Construct the sequence features
-        shape = self.sequences.shape
-        sequences = np.zeros((self.num_envs,) + shape + (5,), dtype=np.float32)
+        sequences = np.zeros(self.observation_space['sequences'].shape, dtype=np.float32)
+        trees = np.full(self.observation_space['tree'].shape, -2, dtype=np.int_)
+
         for i in range(self.num_envs):
-            for j, tree in enumerate(self._state['trees'][i]):
+            state = self._state['trees'][i]
+            for j, tree in enumerate(state):
                 if tree is None:
                     continue
                 sequences[i, j] = ((tree.sequence[:, None] & (1 << np.arange(5))) > 0)
+
+            if all(tree is None for tree in state[1:]):
+                trees[i] = state[0].to_tuple()
 
         return {
             # The Fitch features of each tree
@@ -105,10 +105,8 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             'type': np.array([[get_tree_type(tree) for tree in trees]
                 for trees in self._state['trees']], dtype=np.int_),  # (num_envs, num_nodes)
 
-            # Only returning "trees[0]" because at the terminating state,
-            # the final tree will be in trees[0], and this key will only be
-            # useful when sampling at test time.
-            # 'tree': tuple(trees[0] for trees in self._state['trees']),
+            # A representation of the structure of the trees ("-2" = intermediate state)
+            'tree': trees,  # (num_envs, 2 * num_nodes - 1)
 
             # The mask for the valid actions: (num_envs, num_nodes * (num_nodes - 1) // 2)
             'mask': np.copy(self._state['masks']).astype(np.float32)
@@ -190,7 +188,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
             'states of `PhyloTreeEnvironment`.')
 
     def observation_to_key(self, observation):
-        return observation['tree']
+        return RootedTree.from_tuple(observation['tree'], self.sequences)
 
 
 if __name__ == '__main__':

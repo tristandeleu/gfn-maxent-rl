@@ -20,6 +20,9 @@ class Leaf:
     def __str__(self):
         return str(self.index)
 
+    def to_tuple(self):
+        return (self.index,)
+
 
 @dataclass(frozen=True)
 class RootedTree:
@@ -55,3 +58,12 @@ class RootedTree:
         data.extend(['  ' + p for p in right_str[1:]])
 
         return '\n'.join(data)
+
+    def to_tuple(self):
+        # Returns the structure of the tree in a pre-order representation
+        # Encoding: "internal node" = -1
+        return (-1,) + self.left.to_tuple() + self.right.to_tuple()
+
+    @classmethod
+    def from_tuple(cls, tup, sequences):
+        raise NotImplementedError('TODO: Add deserialization of post-order encoding.')
