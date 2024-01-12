@@ -45,8 +45,9 @@ sources, targets = np.nonzero(graph)
 action_mask = np.zeros((env.single_action_space.n,), dtype=np.bool_)
 action_mask[sources * env.num_variables + targets] = True
 
-trajectories, log_probs = beam_search(params.online, state.network, action_mask)
+trajectories, log_probs, logs = beam_search(params.online, state.network, action_mask)
 
 print(np.nonzero(action_mask))
 print(trajectories)
 print(log_probs)
+print(logs)

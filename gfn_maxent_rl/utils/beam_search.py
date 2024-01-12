@@ -2,9 +2,12 @@ import jax.numpy as jnp
 import jax
 
 
-def beam_search_forward(env, algorithm, beam_size=1):
+def beam_search_forward(env, algorithm, beam_size=1, max_length=None):
+    if max_length is None:
+        max_length = env.max_length
+
     def _beam_search(params, net_state, action_mask):
-        # action_mask: (action_dim,), does not include stop "action"
+        # action_mask: (action_dim,), does not include "stop" action
         # i.e., we have the guarantee that action_mask[-1] == False
         num_actions = action_mask.shape[0]
         length = jnp.sum(action_mask, axis=0)
@@ -36,7 +39,7 @@ def beam_search_forward(env, algorithm, beam_size=1):
             return (trajectories, log_probs, states, t + 1)
 
         # Initialization
-        trajectories = jnp.full((beam_size, env.max_length), -1, dtype=jnp.int32)
+        trajectories = jnp.full((beam_size, max_length), -1, dtype=jnp.int32)
         log_probs = jnp.full((beam_size,), -jnp.inf).at[0].set(0.)
         states = env.func_reset(beam_size)
         t = jnp.array(0, dtype=jnp.int32)
@@ -45,11 +48,22 @@ def beam_search_forward(env, algorithm, beam_size=1):
         init_state = (trajectories, log_probs, states, t)
         trajectories, log_probs, states, t = jax.lax.while_loop(cond_fun, body_fun, init_state)
 
+        # Check that all the states are the same (i.e., all trajectories lead to the same state)
+        states_all_same = jax.tree_util.tree_reduce(
+            lambda val, arr: jnp.logical_and(val, jnp.all(arr == arr[0])),
+            states, jnp.array(True)
+        )
+
         # Add the "stop" action at the end
         observations = env.func_state_to_observation(states, trajectories)
         log_pi = algorithm.log_policy(params, net_state, observations)
         log_probs = log_probs + log_pi[:, -1]  # Add log-probability of the "stop" action
         trajectories = trajectories.at[:, t].set(num_actions)  # Add "stop" action to trajectories
 
-        return (trajectories, log_probs)
+        logs = {
+            'is_valid_length': length < max_length,
+            'is_valid_trajectories': states_all_same,
+        }
+        return (trajectories, log_probs, logs)
+
     return _beam_search

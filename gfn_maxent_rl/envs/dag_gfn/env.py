@@ -201,6 +201,25 @@ class DAGEnvironment(gym.vector.VectorEnv):
     def observation_to_key(self, observation):
         return frozenset(zip(*np.nonzero(observation['adjacency'])))
 
+    def action_masks_batch_iterator(self, keys, batch_size):
+        keys = sorted(keys, key=len)  # Sort graphs by number of edges
+
+        for index in range(0, len(keys), batch_size):
+            keys_ = keys[index, index + batch_size]
+
+            # Create action masks
+            action_masks = np.zeros((len(keys_), self.single_action_space.n), dtype=np.bool_)
+            for i, edges in enumerate(keys_):
+                indices = np.array([self.num_variables * source + target
+                    for (source, target) in edges])
+                action_masks[i, indices] = True
+            
+            # Get maximum length of trajectories
+            # TODO: Use cutoffs for max_length
+            max_length = max([len(key) for key in keys_]) + 1  # "+1" for "stop" action
+
+            yield (keys_, action_masks, max_length)
+
     # Functional API
 
     def func_reset(self, batch_size):
