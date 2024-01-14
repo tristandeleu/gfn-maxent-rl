@@ -54,13 +54,13 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
         rewards = np.zeros((self.num_envs,), dtype=np.float_)
         for i, (trees, action) in enumerate(zip(self._state['trees'], actions)):
-            if action == stop_action:                
+            if action == stop_action:
                 if any((tree is not None) for tree in trees[1:]):
                     raise RuntimeError('Invalid action: called the stop '
                         'action even though we are not in a terminating state.')
 
                 # Reset the state (zero reward at the final step)
-                trees = [Leaf(index=n, sequence=seq)
+                self._state['trees'][i] = [Leaf(index=n, sequence=seq)
                     for (n, seq) in enumerate(self.sequences)]
                 self._state['masks'][i, :] = True
 
@@ -226,8 +226,9 @@ if __name__ == '__main__':
     dones = np.zeros((env.num_envs,), dtype=np.bool_)
 
     observations, _ = env.reset()
-    while not np.all(dones):
+    # while not np.all(dones):
+    for _ in range(100):
         actions = random_actions(observations, rng=rng)
         observations, rewards, dones, _, _ = env.step(actions)
 
-    print(observations['tree'][0])
+    print(RootedTree.from_tuple(observations['tree'][0], env.sequences))
