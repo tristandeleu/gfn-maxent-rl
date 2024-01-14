@@ -41,9 +41,9 @@ def estimate_log_probs_beam_search(
             raise RuntimeError('Not all the trajectories lead to the same state.')
 
         # Complement with randomly sampled trajectories
-        # TODO: Add rejection sampling
+        blacklist = dict((key, set(map(tuple, trajs))) for (key, trajs) in zip(keys, fwd_trajectories))
         bwd_trajectories, log_num_trajectories = env.backward_sample_trajectories(
-            keys, num_trajectories, max_length=max_length, rng=rng)
+            keys, num_trajectories, max_length=max_length, blacklist=blacklist, rng=rng)
         
         # Compute the log-probabilities of the backward trajectories
         log_probs_bwd_trajs = log_prob_fn(params, net_state, bwd_trajectories)
@@ -55,9 +55,6 @@ def estimate_log_probs_beam_search(
 
         # Store the log-probabilities
         log_probs.update(zip(keys, fwd_log_probs + bwd_log_probs))
-
-    # TODO: Add trajectories sampled using backward policy & rejection sampling,
-    # and add correction by the number of trajectories.
 
     return log_probs
 

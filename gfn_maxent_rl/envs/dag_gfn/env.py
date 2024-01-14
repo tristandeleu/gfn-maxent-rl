@@ -225,9 +225,20 @@ class DAGEnvironment(gym.vector.VectorEnv):
             action_masks[i, indices] = True
         return action_masks
 
-    def backward_sample_trajectories(self, keys, num_trajectories, max_length=None, rng=default_rng()):
+    def backward_sample_trajectories(
+            self,
+            keys,
+            num_trajectories,
+            max_length=None,
+            blacklist=None,
+            rng=default_rng(),
+            max_retries=10
+    ):
         if max_length is None:
             max_length = max(len(key) for key in keys) + 1  # "+1" for "stop" action
+        if blacklist is None:
+            blacklist = dict((key, set()) for key in keys)
+
         trajectories = np.full((len(keys), num_trajectories, max_length), -1, dtype=np.int_)
 
         for i, key in enumerate(keys):
@@ -236,8 +247,24 @@ class DAGEnvironment(gym.vector.VectorEnv):
                 for (source, target) in key
             ])
             actions = np.repeat(actions[None], num_trajectories, axis=0)
-            trajectories[i, :, :len(key)] = rng.permuted(actions, axis=1)
-        
+
+            idx, offset = 0, 0
+            while (offset < num_trajectories) and (idx < max_retries):
+                new_trajs = np.full((num_trajectories, max_length), -1, dtype=np.int_)
+                new_trajs[:, :len(key)] = rng.permuted(actions, axis=1)
+
+                # Get the indices of the whitelisted trajectories
+                is_whitelist = np.array([tuple(traj) not in blacklist[key]
+                    for traj in new_trajs], dtype=np.bool_)
+                num_whitelist = np.sum(is_whitelist)
+
+                trajectories[i, offset:offset + num_whitelist] = new_trajs
+                offset += num_whitelist
+                idx += 1
+
+            if idx == max_retries:
+                raise RuntimeError('Impossible to find non-blacklisted trajectories')
+
         # Log-number of trajectories
         num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)
         log_num_trajectories = gammaln(num_edges + 1)  # log(n!)
