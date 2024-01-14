@@ -66,6 +66,9 @@ class RootedTree:
 
     @classmethod
     def from_tuple(cls, tup, sequences):
+        if all(x == -2 for x in tup):
+            return None  # Intermediate state
+
         def _from_tuple(index):
             node = tup[index]
             if node >= 0:

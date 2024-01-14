@@ -187,8 +187,9 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
         raise StatesEnumerationError('Impossible to enumerate all the '
             'states of `PhyloTreeEnvironment`.')
 
-    def observation_to_key(self, observation):
-        return RootedTree.from_tuple(observation['tree'], self.sequences)
+    def observation_to_key(self, observations):
+        return [RootedTree.from_tuple(tree, self.sequences)
+            for tree in observations['tree']]
 
 
 if __name__ == '__main__':
