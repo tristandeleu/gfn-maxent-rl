@@ -252,6 +252,7 @@ class DAGEnvironment(gym.vector.VectorEnv):
             while (offset < num_trajectories) and (idx < max_retries):
                 new_trajs = np.full((num_trajectories, max_length), -1, dtype=np.int_)
                 new_trajs[:, :len(key)] = rng.permuted(actions, axis=1)
+                new_trajs[:, len(key)] = self.single_action_space.n - 1  # Add stop action
 
                 # Get the indices of the whitelisted trajectories
                 is_whitelist = np.array([tuple(traj) not in blacklist[key]
@@ -264,8 +265,6 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
             if idx == max_retries:
                 raise RuntimeError('Impossible to find non-blacklisted trajectories')
-            
-            trajectories[i, :, len(key)] = self.single_action_space.n - 1  # Add stop action
 
         # Log-number of trajectories
         num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)

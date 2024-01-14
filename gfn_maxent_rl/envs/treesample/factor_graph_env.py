@@ -5,9 +5,12 @@ import networkx as nx
 
 from gym.spaces import Dict, Box, Discrete, MultiBinary
 from itertools import product, chain
+from numpy.random import default_rng
+from scipy.special import gammaln
 
 from gfn_maxent_rl.envs.treesample.policy import uniform_log_policy, action_mask
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.envs.treesample.functional import reset, step, state_to_observation
 
 
 class FactorGraphEnvironment(gym.vector.VectorEnv):
@@ -222,3 +225,71 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
     def observation_to_key(self, observation):
         return tuple(observation['variables'])
+
+    def key_batch_iterator(self, keys, batch_size):
+        max_length = self.num_variables + 1  # "+1" for "stop" action
+
+        for index in range(0, len(keys), batch_size):
+            yield (keys[index:index + batch_size], max_length)
+
+    def key_to_action_mask(self, keys):
+        action_masks = np.zeros((len(keys), self.single_action_space.n), dtype=np.bool_)
+        for i, variables in enumerate(keys):
+            indices = np.array([i * self.num_categories + value
+                for (i, value) in enumerate(variables)])
+            action_masks[i, indices] = True
+        return action_masks
+
+    def backward_sample_trajectories(
+            self,
+            keys,
+            num_trajectories,
+            max_length=None,
+            blacklist=None,
+            rng=default_rng(),
+            max_retries=10,
+    ):
+        max_length = self.num_variables + 1
+        if blacklist is None:
+            blacklist = dict((key, set()) for key in keys)
+
+        trajectories = np.full((len(keys), num_trajectories, max_length), -1, dtype=np.int_)
+
+        for i, key in enumerate(keys):
+            actions = np.array([i * self.num_categories + value
+                for (i, value) in enumerate(key)])
+            actions = np.repeat(actions[None], num_trajectories, axis=0)
+
+            idx, offset = 0, 0
+            while (offset < num_trajectories) and (idx < max_retries):
+                new_trajs = np.full((num_trajectories, max_length),
+                    self.single_action_space.n - 1, dtype=np.int_)
+                new_trajs[:, :-1] = rng.permuted(actions, axis=1)
+
+                # Get the indices of the whitelisted trajectories
+                is_whitelist = np.array([tuple(traj) not in blacklist[key]
+                    for traj in new_trajs], dtype=np.bool_)
+                num_whitelist = np.sum(is_whitelist)
+
+                trajectories[i, offset:offset + num_whitelist] = new_trajs[is_whitelist]
+                offset += num_whitelist
+                idx += 1
+
+            if idx == max_retries:
+                raise RuntimeError('Impossible to find non-blacklisted trajectories')
+
+        # Log-number of trajectories
+        log_num_trajectories = np.full((len(keys),), gammaln(self.num_variables + 1))
+        
+        return (trajectories, log_num_trajectories)
+
+    # Functional API
+
+    def func_reset(self, batch_size):
+        return reset(batch_size, self.num_variables)
+
+    def func_step(self, states, actions):
+        return step(states, actions, self.num_categories)
+    
+    def func_state_to_observation(self, states, trajectories):
+        return state_to_observation(states)
