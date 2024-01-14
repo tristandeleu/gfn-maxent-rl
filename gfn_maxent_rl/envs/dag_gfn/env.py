@@ -4,6 +4,8 @@ import math
 import networkx as nx
 
 from gym.spaces import Dict, Box, Discrete
+from numpy.random import default_rng
+from scipy.special import gammaln
 
 from gfn_maxent_rl.envs.dag_gfn.jraph_utils import to_graphs_tuple, batch_sequences_to_graphs_tuple
 from gfn_maxent_rl.envs.dag_gfn.policy import uniform_log_policy, action_mask
@@ -201,24 +203,46 @@ class DAGEnvironment(gym.vector.VectorEnv):
     def observation_to_key(self, observation):
         return frozenset(zip(*np.nonzero(observation['adjacency'])))
 
-    def action_masks_batch_iterator(self, keys, batch_size):
+    def key_batch_iterator(self, keys, batch_size, num_cutoffs=5):
         keys = sorted(keys, key=len)  # Sort graphs by number of edges
+        cutoffs = 1 + np.ceil(np.linspace(len(keys[0],  # "+1" for "stop" action
+            len(keys[-1]), num_cutoffs))).astype(np.int_)
 
         for index in range(0, len(keys), batch_size):
             keys_ = keys[index, index + batch_size]
 
-            # Create action masks
-            action_masks = np.zeros((len(keys_), self.single_action_space.n), dtype=np.bool_)
-            for i, edges in enumerate(keys_):
-                indices = np.array([self.num_variables * source + target
-                    for (source, target) in edges])
-                action_masks[i, indices] = True
-            
-            # Get maximum length of trajectories
-            # TODO: Use cutoffs for max_length
-            max_length = max([len(key) for key in keys_]) + 1  # "+1" for "stop" action
+            # Get maximum length of trajectories (in bins)
+            max_length = max(len(key) for key in keys_) + 1  # "+1" for "stop" action
+            max_length = cutoffs[np.searchsorted(cutoffs, max_length)]
 
-            yield (keys_, action_masks, max_length)
+            yield (keys_, max_length)
+
+    def key_to_action_mask(self, keys):
+        action_masks = np.zeros((len(keys), self.single_action_space.n), dtype=np.bool_)
+        for i, edges in enumerate(keys):
+            indices = np.array([self.num_variables * source + target
+                for (source, target) in edges])
+            action_masks[i, indices] = True
+        return action_masks
+
+    def backward_sample_trajectories(self, keys, num_trajectories, max_length=None, rng=default_rng()):
+        if max_length is None:
+            max_length = max(len(key) for key in keys) + 1  # "+1" for "stop" action
+        trajectories = np.full((len(keys), num_trajectories, max_length), -1, dtype=np.int_)
+
+        for i, key in enumerate(keys):
+            actions = np.asarray([
+                self.num_variables * source + target
+                for (source, target) in key
+            ])
+            actions = np.repeat(actions[None], num_trajectories, axis=0)
+            trajectories[i, :, :len(key)] = rng.permuted(actions, axis=1)
+        
+        # Log-number of trajectories
+        num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)
+        log_num_trajectories = gammaln(num_edges + 1)  # log(n!)
+        
+        return (trajectories, log_num_trajectories)
 
     # Functional API
 
