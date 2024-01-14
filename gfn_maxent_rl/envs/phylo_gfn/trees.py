@@ -66,4 +66,13 @@ class RootedTree:
 
     @classmethod
     def from_tuple(cls, tup, sequences):
-        raise NotImplementedError('TODO: Add deserialization of post-order encoding.')
+        def _from_tuple(index):
+            node = tup[index]
+            if node >= 0:
+                return (Leaf(index=node, sequence=sequences[node]), index)
+            else:
+                left, index = _from_tuple(index + 1)
+                right, index = _from_tuple(index + 1)
+                return (cls(left=left, right=right), index)
+        tree, _ = _from_tuple(0)
+        return tree
