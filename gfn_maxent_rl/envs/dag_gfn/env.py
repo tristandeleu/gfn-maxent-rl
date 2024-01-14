@@ -258,7 +258,7 @@ class DAGEnvironment(gym.vector.VectorEnv):
                     for traj in new_trajs], dtype=np.bool_)
                 num_whitelist = np.sum(is_whitelist)
 
-                trajectories[i, offset:offset + num_whitelist] = new_trajs
+                trajectories[i, offset:offset + num_whitelist] = new_trajs[is_whitelist]
                 offset += num_whitelist
                 idx += 1
 
