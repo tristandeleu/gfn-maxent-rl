@@ -5,6 +5,7 @@ import math
 
 from numpy.random import default_rng
 from scipy.special import logsumexp
+from tqdm.auto import tqdm
 
 from gfn_maxent_rl.utils.beam_search import beam_search_forward
 
@@ -19,6 +20,8 @@ def estimate_log_probs_beam_search(
         beam_size=128,
         batch_size=1,
         num_trajectories=1000,
+        verbose=False,
+        **kwargs
 ):
     log_probs = dict()
 
@@ -27,7 +30,9 @@ def estimate_log_probs_beam_search(
     log_prob_fn = jax.vmap(log_prob_fn, in_axes=(None, None, 0))
     log_prob_fn = jax.jit(log_prob_fn)
 
-    for keys, max_length in env.key_batch_iterator(samples, batch_size=batch_size):
+    num_batches = math.ceil(len(samples) / batch_size)
+    for keys, max_length in tqdm(env.key_batch_iterator(samples, batch_size=batch_size),
+            total=num_batches, disable=(not verbose), **kwargs):
         # Vmap beam search over multiple samples
         beam_search = beam_search_forward(env, algorithm, beam_size=beam_size, max_length=max_length)
         beam_search = jax.vmap(beam_search, in_axes=(None, None, 0))
@@ -71,6 +76,8 @@ def estimate_log_probs_backward(
         rng=default_rng(),
         batch_size=1,
         num_trajectories=1000,
+        verbose=False,
+        **kwargs
 ):
     log_probs = dict()
 
@@ -79,13 +86,16 @@ def estimate_log_probs_backward(
     log_prob_fn = jax.vmap(log_prob_fn, in_axes=(None, None, 0))
     log_prob_fn = jax.jit(log_prob_fn)
 
-    for keys, max_length in env.key_batch_iterator(samples, batch_size=batch_size):
+    num_batches = math.ceil(len(samples) / batch_size)
+    for keys, max_length in tqdm(env.key_batch_iterator(samples, batch_size=batch_size),
+            total=num_batches, disable=(not verbose), **kwargs):
         # Sample random trajectories
         trajectories, log_num_trajectories = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, rng=rng)
 
         # Compute the log-probabilities of all trajectories
         log_probs_trajs = log_prob_fn(params, net_state, trajectories)
+        log_probs_trajs = np.asarray(log_probs_trajs)
 
         # Average over all trajectories, and offset by total number of trajectories
         log_probs_ = log_num_trajectories + np.mean(log_probs_trajs, axis=1)

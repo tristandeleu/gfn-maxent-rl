@@ -46,7 +46,8 @@ log_probs = estimate_log_probs_backward(
     samples=samples,
     rng=default_rng(0),
     batch_size=2,
-    num_trajectories=1000
+    num_trajectories=1000,
+    verbose=True
 )
 
 print('Backward estimation', log_probs)
@@ -64,7 +65,8 @@ log_probs = estimate_log_probs_beam_search(
     rng=default_rng(0),
     batch_size=2,
     beam_size=10,
-    num_trajectories=10
+    num_trajectories=10,
+    verbose=True
 )
 
 print('Beam search estimation', log_probs)
