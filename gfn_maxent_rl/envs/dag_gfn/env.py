@@ -205,11 +205,11 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
     def key_batch_iterator(self, keys, batch_size, num_cutoffs=5):
         keys = sorted(keys, key=len)  # Sort graphs by number of edges
-        cutoffs = 1 + np.ceil(np.linspace(len(keys[0],  # "+1" for "stop" action
-            len(keys[-1]), num_cutoffs))).astype(np.int_)
+        cutoffs = 1 + np.ceil(np.linspace(len(keys[0]),  # "+1" for "stop" action
+            len(keys[-1]), num_cutoffs)).astype(np.int_)
 
         for index in range(0, len(keys), batch_size):
-            keys_ = keys[index, index + batch_size]
+            keys_ = keys[index:index + batch_size]
 
             # Get maximum length of trajectories (in bins)
             max_length = max(len(key) for key in keys_) + 1  # "+1" for "stop" action
@@ -264,6 +264,8 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
             if idx == max_retries:
                 raise RuntimeError('Impossible to find non-blacklisted trajectories')
+            
+            trajectories[i, :, len(key)] = self.single_action_space.n - 1  # Add stop action
 
         # Log-number of trajectories
         num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)

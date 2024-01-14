@@ -4,6 +4,7 @@ import jax
 import math
 
 from numpy.random import default_rng
+from scipy.special import logsumexp
 
 from gfn_maxent_rl.utils.beam_search import beam_search_forward
 
@@ -39,9 +40,10 @@ def estimate_log_probs_beam_search(
             raise RuntimeError('Some trajectories are longer than the maximum length.')
         if not np.all(logs['is_valid_trajectories']):
             raise RuntimeError('Not all the trajectories lead to the same state.')
+        fwd_log_probs = logsumexp(fwd_log_probs, axis=1)
 
         # Complement with randomly sampled trajectories
-        blacklist = dict((key, set(map(tuple, trajs))) for (key, trajs) in zip(keys, fwd_trajectories))
+        blacklist = dict((key, set(map(tuple, trajs.tolist()))) for (key, trajs) in zip(keys, fwd_trajectories))
         bwd_trajectories, log_num_trajectories = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, blacklist=blacklist, rng=rng)
         
@@ -54,7 +56,8 @@ def estimate_log_probs_beam_search(
         bwd_log_probs = offset + np.mean(log_probs_bwd_trajs, axis=1)
 
         # Store the log-probabilities
-        log_probs.update(zip(keys, fwd_log_probs + bwd_log_probs))
+        log_probs_ = np.logaddexp(fwd_log_probs, bwd_log_probs)
+        log_probs.update(zip(keys, log_probs_))
 
     return log_probs
 
@@ -111,7 +114,7 @@ def log_prob_trajectories(env, algorithm):
             # Step in the environment
             states = env.func_step(states, actions)
 
-            return (log_probs, states, partial_trajs, t + 1)
+            return ((log_probs, states, partial_trajs, t + 1), None)
 
         # Initialize state
         batch_size = trajectories.shape[0]
