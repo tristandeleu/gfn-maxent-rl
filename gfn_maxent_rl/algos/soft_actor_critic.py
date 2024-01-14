@@ -101,13 +101,13 @@ class SAC(BaseAlgorithm):
         logs.update({'actor_loss': actor_loss, 'loss': loss})
         return (loss, logs)
 
-    def init(self, key, samples, normalization=1):
+    def init(self, key, normalization=1):
         subkey1, subkey2, subkey3 = jax.random.split(key, 3)
 
         # Initialize the network parameters (both online, and possibly target)
-        actor_params, actor_state = self.actor_network.init(subkey1, samples['observation'])
-        critic1_params, critic1_state = self.critic_network.init(subkey2, samples['observation'])
-        critic2_params, critic2_state = self.critic_network.init(subkey3, samples['observation'])
+        actor_params, actor_state = self.actor_network.init(subkey1, self._dummy_observation)
+        critic1_params, critic1_state = self.critic_network.init(subkey2, self._dummy_observation)
+        critic2_params, critic2_state = self.critic_network.init(subkey3, self._dummy_observation)
         online_params = SACParameters(actor=actor_params, critic=(critic1_params, critic2_params))
 
         target_params = online_params.critic if self.use_target else None

@@ -47,12 +47,12 @@ class GFNDetailedBalanceVanilla(BaseAlgorithm):
 
         return (loss, logs)
 
-    def init(self, key, samples, normalization=1):
+    def init(self, key, normalization=1):
         subkey1, subkey2 = jax.random.split(key)
 
         # Initialize the network parameters (both online, and possibly target)
-        policy_params, policy_state = self.policy_network.init(subkey1, samples['observation'])
-        flow_params, flow_state = self.flow_network.init(subkey2, samples['observation'])
+        policy_params, policy_state = self.policy_network.init(subkey1, self._dummy_observation)
+        flow_params, flow_state = self.flow_network.init(subkey2, self._dummy_observation)
         online_params = DBVParameters(policy=policy_params, flow=flow_params)
 
         target_params = online_params if self.use_target else None

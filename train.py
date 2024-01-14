@@ -69,7 +69,7 @@ def main(config):
     # Create the algorithm
     algorithm = hydra.utils.instantiate(config.algorithm, env=env)
     algorithm.optimizer = hydra.utils.instantiate(config.optimizer)
-    params, state = algorithm.init(key, replay.dummy_samples)
+    params, state = algorithm.init(key)
 
     exploration_schedule = jax.jit(optax.linear_schedule(
         init_value=jnp.array(0.),

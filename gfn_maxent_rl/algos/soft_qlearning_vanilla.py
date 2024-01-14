@@ -36,9 +36,9 @@ class SoftQLearningVanilla(BaseAlgorithm):
         logs = {'errors': errors, 'loss': loss}
         return (loss, logs)
 
-    def init(self, key, samples, normalization=1):
+    def init(self, key, normalization=1):
         # Initialize the network parameters (both online, and possibly target)
-        online_params, net_state = self.network.init(key, samples['observation'])
+        online_params, net_state = self.network.init(key, self._dummy_observation)
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
 

@@ -45,18 +45,6 @@ class ReplayBuffer:
             'next_observation': self.env.decode(samples['next_observation']),
         }
 
-    @property
-    def dummy_samples(self):
-        dummy_observation = np.zeros((1,), dtype=self.env.observation_dtype)
-        dummy_observation = self.env.decode(dummy_observation)
-
-        return {
-            'observation': dummy_observation,
-            'action': np.zeros((1, 1), dtype=np.int_),
-            'reward': np.zeros((1, 1), dtype=np.float_),
-            'next_observation': dummy_observation,
-        }
-
     def __len__(self):
         return self.capacity if self._is_full else self._index
 

@@ -1,3 +1,4 @@
+import numpy as np
 import jax.numpy as jnp
 import jax
 import haiku as hk
@@ -104,6 +105,10 @@ class BaseAlgorithm(ABC):
     def use_target(self):
         return self.target is not None
 
+    @property
+    def _dummy_observation(self):
+        observation = np.zeros((1,), dtype=self.env.observation_dtype)
+        return self.env.decode(observation)
 
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
@@ -112,9 +117,13 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
-    def init(self, key, samples, normalization=1):
+    def init(self, key, normalization=1):
+        # Get dummy observation
+        observation = np.zeros((1,), dtype=self.env.observation_dtype)
+        observation = self.env.decode(observation)
+
         # Initialize the network parameters (both online, and possibly target)
-        net_params, net_state = self.network.init(key, samples['observation'])
+        net_params, net_state = self.network.init(key, self._dummy_observation)
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
