@@ -182,8 +182,7 @@ def f_network_mlp():
         )(input)
 
         encoding = encoding.reshape(batch_size, num_nodes * 128)
-        outputs = hk.Linear(output_size)(encoding)
-        outputs = jnp.squeeze(outputs, axis=-1)
+        outputs = jnp.average(encoding, axis=-1)
 
         # Set the flow at terminating states to 0
         # /!\ This is assuming that the terminal state is the *only* child of
@@ -217,8 +216,7 @@ def f_network_transformer():
 
         encoding = Transformer()(input_embeddings, batch_padding_mask)
         encoding = encoding.reshape(batch_size, num_nodes * 128)
-        outputs = hk.Linear(output_size)(encoding)
-        outputs = jnp.squeeze(outputs, axis=-1)
+        outputs = jnp.average(encoding, axis=-1)
 
         # Set the flow at terminating states to 0
         # /!\ This is assuming that the terminal state is the *only* child of
