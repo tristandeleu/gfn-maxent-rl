@@ -12,17 +12,11 @@ env_wrapper:
 
 policy_network:
   _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.policy_network_transformer"
-#  path: ""
-  num_categories: 1
 
 value_network:
-  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.policy_network_transformer"
-#  path: ""
-  num_categories: 1
+  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.q_network_transformer"
 
 flow_network:
-  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.policy_network_transformer"
-#  path: ""
-  num_categories: 1
+  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.f_network_transformer"
 
 exp_name_env: "phylo_gfn"
