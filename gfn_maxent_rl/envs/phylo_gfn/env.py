@@ -5,6 +5,7 @@ import operator as op
 
 from gym.spaces import Dict, Box, Discrete
 from functools import reduce
+from numpy.random import default_rng
 
 from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree, generate_trajectories
 from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
@@ -128,7 +129,7 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
     @property
     def max_length(self):
-        return self.sequences.shape[0] + 1
+        return self.sequences.shape[0]
 
     def encode(self, observations):
         batch_size = observations['sequences'].shape[0]
@@ -212,11 +213,12 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
         if blacklist is not None:
             raise NotImplementedError('Argument `blacklist` must be `None`.')
 
-        trajectories = np.full((len(keys), num_trajectories, self.max_length), -1, dtype=np.int_)
+        trajectories = np.full((len(keys), num_trajectories, self.max_length),
+            self.single_action_space.n - 1, dtype=np.int_)
         log_num_trajectories = np.zeros((len(keys),), dtype=np.float_)
 
         for i, key in enumerate(keys):
-            trajectories[i], log_num_trajectories[i] = generate_trajectories(key,
+            trajectories[i, :, :-1], log_num_trajectories[i] = generate_trajectories(key,
                 self.sequences.shape[0], num_trajectories, rng=rng)
 
         return (trajectories, log_num_trajectories)

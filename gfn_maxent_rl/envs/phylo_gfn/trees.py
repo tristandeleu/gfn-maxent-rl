@@ -13,7 +13,7 @@ class Leaf:
     sequence: np.ndarray
 
     def __hash__(self):
-        return hash((self.index, self.sequence))
+        return hash((self.index, tuple(self.sequence)))
 
     def __eq__(self, other):
         return ((self.index == other.index)

@@ -7,14 +7,14 @@ def reset(batch_size, sequences):
 
     return {
         'trees': jnp.repeat(sequences[None], batch_size, axis=0),
-        'masks': jnp.ones((batch_size, max_actions), dtype=jnp.bool_),
+        'mask': jnp.ones((batch_size, max_actions), dtype=jnp.bool_),
         'type': jnp.ones((batch_size, num_nodes), dtype=jnp.int32)
     }
 
 
 def step(states, actions):
     batch_size, num_nodes = states['trees'].shape[:2]
-    stop_action = states['masks'].shape[1]
+    stop_action = states['mask'].shape[1]
     arange = jnp.arange(batch_size)
 
     lefts, rights = jnp.triu_indices(num_nodes, k=1)
@@ -39,10 +39,10 @@ def step(states, actions):
 
     # Update the masks
     new_masks = states['mask']
-    new_masks = new_masks.at[lefts[None] == right].set(False)
-    new_masks = new_masks.at[rights[None] == right].set(False)
+    new_masks = jnp.logical_and(new_masks, lefts != right[:, None])
+    new_masks = jnp.logical_and(new_masks, rights != right[:, None])
 
-    return {'trees': trees, 'masks': new_masks, 'type': types}
+    return {'trees': trees, 'mask': new_masks, 'type': types}
 
 
 def state_to_observation(states):
@@ -51,5 +51,5 @@ def state_to_observation(states):
     return {
         'sequences': sequences.astype(jnp.float32),
         'type': states['type'],
-        'masks': states['mask'].astype(jnp.float32)
+        'mask': states['mask'].astype(jnp.float32)
     }
