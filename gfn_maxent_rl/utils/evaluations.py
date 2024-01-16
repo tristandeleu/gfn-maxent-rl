@@ -46,6 +46,51 @@ def get_samples_from_env(
         verbose=False,
         **kwargs
     ):
+    """Get samples by running the policy in the environment.
+
+    Parameters
+    ----------
+    env : gym.vector.VectorEnv instance
+        The environment.
+
+    algorithm : BaseAlgorithm instance
+        The algorithm. This must implement the `log_policy` method.
+
+    params : Any
+        The parameters of the networks (e.g., the policy network).
+        Note that this must be the parameters of the *online* network
+        (i.e., the parameters learned by the algorithm).
+
+    net_state : Any
+        The state of the network. This will be typically `state.network`,
+        where `state` is the state returned by the initialization of the
+        algorithm (and updated during training).
+
+    key : jax.random.PRNGKey
+        The Jax random key.
+
+    num_samples : int
+        The number of samples to return.
+
+    copy_env : bool
+        Whether `env` must be (deep)copied or not. This is useful if `env`
+        is the instance of the environment used for training, to avoid any
+        interaction. Set to False if we have an explicit validation env.
+
+    verbose : bool
+        Display a progress bar.
+
+    Returns
+    -------
+    samples : list of samples
+        A list of samples, of length `num_samples`. The samples are hashable
+        keys, dependent on the environment (e.g., a tuple for Treesample envs).
+
+    returns : np.ndarray, shape `(num_samples,)`
+        The return of the trajectory for each sample. If the environment is not
+        wrapped with a reward correction, then this corresponds exactly to
+        the log-reward of each sample.
+    """
     samples, returns = [], []
     if copy_env:
         env = deepcopy(env)

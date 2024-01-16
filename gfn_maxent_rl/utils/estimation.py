@@ -79,6 +79,67 @@ def estimate_log_probs_backward(
         verbose=False,
         **kwargs
 ):
+    """Estimation of the log-probability of samples.
+
+    Given a policy \pi(s_t+1 | s_t), the log-probability of a sample "x"
+    is equal to
+
+        P(x) = \sum_{tau} \pi(tau)
+    
+    where the sum is over all the trajectories from the initial state
+    to the state "x", and \pi(tau) = \prod \pi(s_t+1 | s_t) along the
+    trajectory. Since the number of trajectories is combinatorially large,
+    we write this sum as
+
+        P(x) = K * E_{tau ~ P_B}[\pi(tau)]
+    
+    where the expectation is over trajectories sampled with the backward
+    policy P_B, and K is the number of trajectories to "x". We can then
+    use Monte-Carlo estimation to estimate this expectation, by sampling
+    multiple trajectories using (uniform) P_B.
+
+    Parameters
+    ----------
+    env : gym.vector.VectorEnv instance
+        The environment.
+
+    algorithm : BaseAlgorithm instance
+        The algorithm. This must implement the `log_policy` method.
+
+    params : Any
+        The parameters of the networks (e.g., the policy network).
+        Note that this must be the parameters of the *online* network
+        (i.e., the parameters learned by the algorithm).
+
+    net_state : Any
+        The state of the network. This will be typically `state.network`,
+        where `state` is the state returned by the initialization of the
+        algorithm (and updated during training).
+
+    samples : list
+        The list of samples. Each sample must be a hashable key. See
+        `utils/evaluations.py:get_samples_from_env`.
+
+    rng : numpy.random.Generator instance
+        The RNG for numpy (to sample trajectories with P_B).
+
+    batch_size : int
+        The batch-size for calling the evaluation function. Increase or
+        decrease depending on the amount of (GPU) memory available.
+
+    num_trajectories : int
+        The number of trajectories for the Monte-Carlo estimation of the
+        expectation above.
+
+    verbose : bool
+        Display a progress bar.
+
+    Returns
+    -------
+    log_probs : dict (sample, float)
+        A dictionary containing the estimate of the log-probability for
+        each sample (samples are in the keys of the dictionary).
+    """
     log_probs = dict()
 
     # Vmap function over multiple samples
