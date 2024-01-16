@@ -11,12 +11,15 @@ env_wrapper:
   alpha: 1.0
 
 policy_network:
-  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.policy_network_transformer"
+  _target_: "hydra.utils.get_method"
+  path: "gfn_maxent_rl.envs.phylo_gfn.policy.policy_network_transformer"
 
 value_network:
-  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.q_network_transformer"
+  _target_: "hydra.utils.get_method"
+  path: "gfn_maxent_rl.envs.phylo_gfn.policy.q_network_transformer"
 
 flow_network:
-  _target_: "gfn_maxent_rl.envs.phylo_gfn.policy.f_network_transformer"
+  _target_: "hydra.utils.get_method"
+  path: "gfn_maxent_rl.envs.phylo_gfn.policy.f_network_transformer"
 
 exp_name_env: "phylo_gfn"

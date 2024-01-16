@@ -26,205 +26,86 @@ def log_policy(logits, masks):
     return jax.nn.log_softmax(logits, axis=1)
 
 
-def policy_network_mlp():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+def encoder(observations):
+    batch_size, num_nodes = observations['sequences'].shape[:2]
 
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        encoding = hk.nets.MLP(
-            (256, 256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
+    input = observations['sequences'].reshape(batch_size, num_nodes, -1)
+    token_embeddings = hk.nets.MLP(
+        (256, 128),
+        activation=jax.nn.leaky_relu
+    )(input)
 
-        # Pairwise combination
-        row, col = jnp.triu_indices(num_nodes, k=1)
-        encodings_combination = encoding[:, row] + encoding[:, col]
+    # padding mask
+    batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
 
-        # Tree topology MLP
-        logits = hk.nets.MLP(
-            (256, 256, 1),
-            activation=jax.nn.leaky_relu
-        )(encodings_combination)
-        logits = jnp.squeeze(logits, axis=-1)
+    embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
+    positional_embeddings = hk.get_parameter(
+        'positional_embeddings', [num_nodes, 128], init=embed_init)
 
-        # Mask out the invalid actions
-        norm = hk.get_state('normalization', (), init=jnp.ones)
-        return log_policy(logits * norm, observations['mask'])
+    input_embeddings = token_embeddings + positional_embeddings
 
-    return network
+    return Transformer()(input_embeddings, batch_padding_mask)
 
 
-def policy_network_transformer():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+def policy_network_transformer(observations):
+    num_nodes = observations['sequences'].shape[1]
+    encoding = encoder(observations)
 
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
-        token_embeddings = hk.nets.MLP(
-            (256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
+    # Pairwise combination
+    row, col = jnp.triu_indices(num_nodes, k=1)
+    encodings_combination = encoding[:, row] + encoding[:, col]
 
-        # padding mask
-        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
+    # Tree topology MLP
+    logits = hk.nets.MLP(
+        (256, 256, 1),
+        activation=jax.nn.leaky_relu
+    )(encodings_combination)
+    logits = jnp.squeeze(logits, axis=-1)
 
-        positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [27, 128], init=embed_init)
+    # # Edge lengths MLP
+    # edge_lengths = hk.nets.MLP(
+    #     (256, 256, output_size),
+    #     activation=jax.nn.leaky_relu
+    # )(tree_topology)
 
-        input_embeddings = token_embeddings + positional_embeddings
-
-        encoding = Transformer()(input_embeddings, batch_padding_mask)
-
-
-        # Pairwise combination
-        row, col = jnp.triu_indices(num_nodes, k=1)
-        encodings_combination = encoding[:, row] + encoding[:, col]
-
-        # Tree topology MLP
-        logits = hk.nets.MLP(
-            (256, 256, 1),
-            activation=jax.nn.leaky_relu
-        )(encodings_combination)
-        logits = jnp.squeeze(logits, axis=-1)
+    norm = hk.get_state('normalization', (), init=jnp.ones)
+    return log_policy(logits * norm, observations['mask'])
 
 
-        # # Edge lengths MLP
-        # edge_lengths = hk.nets.MLP(
-        #     (256, 256, output_size),
-        #     activation=jax.nn.leaky_relu
-        # )(tree_topology)
+def q_network_transformer(observations):
+    batch_size, num_nodes = observations['sequences'].shape[:2]
+    encoding = encoder(observations)
 
-        norm = hk.get_state('normalization', (), init=jnp.ones)
-        return log_policy(logits * norm, observations['mask'])
+    # Pairwise combination
+    row, col = jnp.triu_indices(num_nodes, k=1)
+    encodings_combination = encoding[:, row] + encoding[:, col]
 
-    return network
+    # Tree topology MLP
+    logits = hk.nets.MLP(
+        (256, 256, 1),
+        activation=jax.nn.leaky_relu
+    )(encodings_combination)
+    q_values_continue = jnp.squeeze(logits, axis=-1)
 
+    # Value of the stop action is 0
+    q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
+    outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
-def q_network_mlp():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
-
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        encoding = hk.nets.MLP(
-            (256, 256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
-
-        # Pairwise combination
-        row, col = jnp.triu_indices(num_nodes, k=1)
-        encodings_combination = encoding[:, row] + encoding[:, col]
-
-        # Tree topology MLP
-        logits = hk.nets.MLP(
-            (256, 256, 1),
-            activation=jax.nn.leaky_relu
-        )(encodings_combination)
-        q_values_continue = jnp.squeeze(logits, axis=-1)
-
-        # Value of the stop action is 0
-        q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
-        outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
-
-        return outputs
-
-    return network
+    return outputs
 
 
-def q_network_transformer():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+def f_network_transformer(observations):
+    batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+    encoding = encoder(observations)
+    encoding = encoding.reshape(batch_size, -1)
+    # outputs = jnp.average(encoding, axis=-1)
+    outputs = hk.Linear(1)(encoding)
+    outputs = jnp.squeeze(outputs, axis=-1)
 
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
-        token_embeddings = hk.nets.MLP(
-            (256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
+    # Set the flow at terminating states to 0
+    # /!\ This is assuming that the terminal state is the *only* child of
+    # any terminating state, which is true for the TreeSample environments.
+    is_intermediate = jnp.any(observations['mask'], axis=-1)
+    outputs = jnp.where(is_intermediate, outputs, 0.)
 
-        # padding mask
-        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
-
-        positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [27, 128], init=embed_init)
-
-        input_embeddings = token_embeddings + positional_embeddings
-
-        encoding = Transformer()(input_embeddings, batch_padding_mask)
-
-        # Pairwise combination
-        row, col = jnp.triu_indices(num_nodes, k=1)
-        encodings_combination = encoding[:, row] + encoding[:, col]
-
-        # Tree topology MLP
-        logits = hk.nets.MLP(
-            (256, 256, 1),
-            activation=jax.nn.leaky_relu
-        )(encodings_combination)
-        q_values_continue = jnp.squeeze(logits, axis=-1)
-
-        # Value of the stop action is 0
-        q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
-        outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
-
-        return outputs
-
-    return network
-
-
-def f_network_mlp():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
-
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        encoding = hk.nets.MLP(
-            (256, 256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
-
-        encoding = encoding.reshape(batch_size, num_nodes * 128)
-        outputs = jnp.average(encoding, axis=-1)
-
-        # Set the flow at terminating states to 0
-        # /!\ This is assuming that the terminal state is the *only* child of
-        # any terminating state, which is true for the TreeSample environments.
-        is_intermediate = jnp.any(observations['mask'], axis=-1)
-        outputs = jnp.where(is_intermediate, outputs, 0.)
-        return outputs
-
-    return network
-
-
-def f_network_transformer():
-    def network(observations):
-        batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
-        output_size = 1
-
-        input = observations['sequences'].reshape(batch_size, num_nodes, -1)
-        embed_init = hk.initializers.TruncatedNormal(stddev=0.02)
-        token_embeddings = hk.nets.MLP(
-            (256, 128),
-            activation=jax.nn.leaky_relu
-        )(input)
-
-        # padding mask
-        batch_padding_mask = (observations['type'] > 0).astype(jnp.float32)
-
-        positional_embeddings = hk.get_parameter(
-            'positional_embeddings', [27, 128], init=embed_init)
-
-        input_embeddings = token_embeddings + positional_embeddings
-
-        encoding = Transformer()(input_embeddings, batch_padding_mask)
-        encoding = encoding.reshape(batch_size, num_nodes * 128)
-        # outputs = jnp.average(encoding, axis=-1)
-        outputs = hk.Linear(output_size)(encoding)
-        outputs = jnp.squeeze(outputs, axis=-1)
-
-        # Set the flow at terminating states to 0
-        # /!\ This is assuming that the terminal state is the *only* child of
-        # any terminating state, which is true for the TreeSample environments.
-        is_intermediate = jnp.any(observations['mask'], axis=-1)
-        outputs = jnp.where(is_intermediate, outputs, 0.)
-        return outputs
-
-    return network
+    return outputs
