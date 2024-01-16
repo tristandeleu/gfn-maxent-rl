@@ -200,8 +200,9 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
         return self._state_graph
 
-    def observation_to_key(self, observation):
-        return frozenset(zip(*np.nonzero(observation['adjacency'])))
+    def observation_to_key(self, observations):
+        return [frozenset(zip(*np.nonzero(adjacency)))
+            for adjacency in observations['adjacency']]
 
     def key_batch_iterator(self, keys, batch_size, num_cutoffs=5):
         keys = sorted(keys, key=len)  # Sort graphs by number of edges

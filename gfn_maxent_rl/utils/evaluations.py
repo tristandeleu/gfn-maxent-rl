@@ -1,5 +1,8 @@
 import numpy as np
 
+from copy import deepcopy
+from tqdm.auto import trange
+
 
 def evaluation(params_online, state_network, key, algorithm, env_valid, config):
     all_returns = []
@@ -30,3 +33,49 @@ def evaluation(params_online, state_network, key, algorithm, env_valid, config):
     # average_return = np.array(all_returns).mean()
 
     return np.array(all_returns).mean(), np.array(adjacencies)
+
+
+def get_samples_from_env(
+        env,
+        algorithm,
+        params,
+        net_state,
+        key,
+        num_samples=1000,
+        copy_env=True,
+        verbose=False,
+        **kwargs
+    ):
+    samples, returns = [], []
+    if copy_env:
+        env = deepcopy(env)
+    observations, _ = env.reset()
+
+    returns_ = np.zeros((env.num_envs,), dtype=np.float_)
+    with trange(num_samples, disable=(not verbose), **kwargs) as pbar:
+        while len(samples) < num_samples:
+            keys = env.observation_to_key(observations)
+
+            # Sample actions from the model (w/o exploration)
+            actions, key, _ = algorithm.act(
+                params, net_state, key, observations, epsilon=1.)
+            actions = np.asarray(actions)
+
+            # Apply the actions in the environment
+            observations, rewards, dones, *_ = env.step(actions)
+
+            # Compute the returns
+            returns_ = returns_ + rewards * (1. - dones)
+
+            # Add samples from the complete trajectories
+            samples.extend([key for (key, done) in zip(keys, dones) if done])
+            returns.extend([return_ for (return_, done) in zip(returns_, dones) if done])
+            pbar.update(min(num_samples - pbar.n, np.sum(dones).item()))
+
+            # Reset the returns for complete trajectories
+            returns_[dones] = 0.
+
+    samples = samples[:num_samples]
+    returns = returns[:num_samples]
+
+    return (samples, np.asarray(returns))

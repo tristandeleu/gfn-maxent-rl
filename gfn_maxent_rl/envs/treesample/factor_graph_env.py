@@ -223,8 +223,8 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
         return self._state_graph
 
-    def observation_to_key(self, observation):
-        return tuple(observation['variables'])
+    def observation_to_key(self, observations):
+        return [tuple(variables) for variables in observations['variables']]
 
     def key_batch_iterator(self, keys, batch_size):
         for index in range(0, len(keys), batch_size):
