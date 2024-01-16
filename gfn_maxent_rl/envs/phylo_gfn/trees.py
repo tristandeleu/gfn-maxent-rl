@@ -3,6 +3,8 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Union
 from functools import cached_property
+from numpy.random import default_rng
+from scipy.special import gammaln
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,10 @@ class RootedTree:
         overlap = self.left.sequence & self.right.sequence
         union = self.left.sequence | self.right.sequence
         return np.where(overlap > 0, overlap, union)
+
+    @cached_property
+    def index(self):
+        return min(self.left.index, self.right.index)
 
     def __hash__(self):
         return hash(frozenset({self.left, self.right}))
@@ -79,3 +85,62 @@ class RootedTree:
                 return (cls(left=left, right=right), index)
         tree, _ = _from_tuple(0)
         return tree
+
+
+def generate_trajectories(tree, num_nodes, num_trajectories, rng=default_rng()):
+    if isinstance(tree, Leaf):
+        trajectories = np.zeros((num_trajectories, 0), dtype=np.int_)
+        log_num_trajectories = 0.
+    else:
+        # Get the last action
+        action = tree.left.index * num_nodes \
+            - tree.left.index * (tree.left.index + 1) // 2 \
+            + tree.right.index - (tree.left.index + 1)
+        actions = np.full((num_trajectories, 1), action, dtype=np.int_)
+
+        # Get trajectories & number of trajectories
+        left_trajs, left_logn = generate_trajectories(tree.left, num_nodes, num_trajectories, rng=rng)
+        right_trajs, right_logn = generate_trajectories(tree.right, num_nodes, num_trajectories, rng=rng)
+
+        # Shuffle the orders
+        left_num, right_num = left_trajs.shape[1], right_trajs.shape[1]
+        masks = np.zeros((num_trajectories, left_num + right_num), dtype=np.bool_)
+        masks[:, :left_num] = True
+        masks = rng.permuted(masks, axis=1)
+
+        # Interlace actions
+        prefix = np.zeros((num_trajectories, left_num + right_num), dtype=np.int_)
+        prefix[masks] = left_trajs.reshape(-1)
+        prefix[~masks] = right_trajs.reshape(-1)
+
+        trajectories = np.concatenate((prefix, actions), axis=1)
+
+        # Get log-number of trajectories
+        log_num_trajectories = left_logn + right_logn \
+            + gammaln(left_num + right_num + 1) \
+            - gammaln(left_num + 1) - gammaln(right_num + 1)
+
+    return (trajectories, log_num_trajectories)
+
+
+if __name__ == '__main__':
+    tree = RootedTree(
+        left=RootedTree(
+            left=Leaf(0, None),
+            right=Leaf(1, None)
+        ),
+        right=RootedTree(
+            left=Leaf(2, None),
+            right=RootedTree(
+                left=Leaf(3, None),
+                right=Leaf(4, None)
+            )
+        )
+    )
+    print(tree)
+
+    rng = default_rng(0)
+    actions, log_num_trajectories = generate_trajectories(tree, 5, 5, rng)
+
+    print(actions)
+    print(np.exp(log_num_trajectories))

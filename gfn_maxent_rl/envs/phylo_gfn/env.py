@@ -6,10 +6,11 @@ import operator as op
 from gym.spaces import Dict, Box, Discrete
 from functools import reduce
 
-from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree
+from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree, generate_trajectories
 from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
 from gfn_maxent_rl.envs.phylo_gfn.policy import uniform_log_policy, action_mask
-from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.envs.errors import StatesEnumerationError, PermutationEnvironmentError
+from gfn_maxent_rl.envs.phylo_gfn.functional import reset, step, state_to_observation
 
 
 class PhyloTreeEnvironment(gym.vector.VectorEnv):
@@ -190,6 +191,45 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
     def observation_to_key(self, observations):
         return [RootedTree.from_tuple(tree, self.sequences)
             for tree in observations['tree']]
+
+    def key_batch_iterator(self, keys, batch_size):
+        for index in range(0, len(keys), batch_size):
+            yield (keys[index:index + batch_size], self.max_length)
+
+    def key_to_action_mask(self, keys):
+        raise PermutationEnvironmentError('The environment does not generate '
+            'objects as permutations of actions.')
+
+    def backward_sample_trajectories(
+            self,
+            keys,
+            num_trajectories,
+            max_length=None,
+            blacklist=None,
+            rng=default_rng(),
+            max_retries=10
+    ):
+        if blacklist is not None:
+            raise NotImplementedError('Argument `blacklist` must be `None`.')
+
+        trajectories = np.full((len(keys), num_trajectories, self.max_length), -1, dtype=np.int_)
+        log_num_trajectories = np.zeros((len(keys),), dtype=np.float_)
+
+        for i, key in enumerate(keys):
+            trajectories[i], log_num_trajectories[i] = generate_trajectories(key,
+                self.sequences.shape[0], num_trajectories, rng=rng)
+
+        return (trajectories, log_num_trajectories)
+
+    # Functional API
+    def func_reset(self, batch_size):
+        return reset(batch_size, self.sequences)
+
+    def func_step(self, states, actions):
+        return step(states, actions)
+
+    def func_state_to_observation(self, states, trajectories):
+        return state_to_observation(states)
 
 
 if __name__ == '__main__':

@@ -227,10 +227,8 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
         return tuple(observation['variables'])
 
     def key_batch_iterator(self, keys, batch_size):
-        max_length = self.num_variables + 1  # "+1" for "stop" action
-
         for index in range(0, len(keys), batch_size):
-            yield (keys[index:index + batch_size], max_length)
+            yield (keys[index:index + batch_size], self.max_length)
 
     def key_to_action_mask(self, keys):
         action_masks = np.zeros((len(keys), self.single_action_space.n), dtype=np.bool_)
@@ -249,11 +247,10 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             rng=default_rng(),
             max_retries=10,
     ):
-        max_length = self.num_variables + 1
         if blacklist is None:
             blacklist = dict((key, set()) for key in keys)
 
-        trajectories = np.full((len(keys), num_trajectories, max_length), -1, dtype=np.int_)
+        trajectories = np.full((len(keys), num_trajectories, self.max_length), -1, dtype=np.int_)
 
         for i, key in enumerate(keys):
             actions = np.array([i * self.num_categories + value
@@ -262,7 +259,7 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
 
             idx, offset = 0, 0
             while (offset < num_trajectories) and (idx < max_retries):
-                new_trajs = np.full((num_trajectories, max_length),
+                new_trajs = np.full((num_trajectories, self.max_length),
                     self.single_action_space.n - 1, dtype=np.int_)
                 new_trajs[:, :-1] = rng.permuted(actions, axis=1)
 
