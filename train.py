@@ -6,6 +6,8 @@ import wandb
 import hydra
 import omegaconf
 import networkx as nx
+import pickle
+import os
 
 from numpy.random import default_rng
 from tqdm.auto import trange
@@ -16,6 +18,7 @@ from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 from gfn_maxent_rl.utils.evaluations import evaluation
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.utils import io
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -137,6 +140,7 @@ def main(config):
                 })
 
     # Evaluate the final model
+
     evaluator.enqueue(
         params.online,
         state.network,
@@ -144,6 +148,12 @@ def main(config):
         batch_size=config.batch_size
     )
     metrics = evaluator.join()
+
+    # Save model
+    io.save(os.path.join(wandb.run.dir, 'model.npz'), params.online._asdict())
+    wandb.save('model.npz', policy='now')
+
+
 
 
 if __name__ == '__main__':
