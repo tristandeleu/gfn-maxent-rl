@@ -150,10 +150,9 @@ def main(config):
     metrics = evaluator.join()
 
     # Save model
-    io.save(os.path.join(wandb.run.dir, 'model.npz'), params.online._asdict())
+    with open(os.path.join(wandb.run.dir, 'model.npz'), 'wb') as f:
+        io.save(f, params=params.online, state=state.network)
     wandb.save('model.npz', policy='now')
-
-
 
 
 if __name__ == '__main__':
