@@ -14,6 +14,7 @@ from gfn_maxent_rl.envs.phylo_gfn.policy import f_network_transformer
 from gfn_maxent_rl.algos.detailed_balance_vanilla import DBVParameters
 
 from gfn_maxent_rl.utils.estimation import estimate_log_probs_backward, estimate_log_probs_beam_search
+from gfn_maxent_rl.utils.evaluations import get_samples_from_env
 
 from pathlib import Path
 from numpy.random import default_rng
@@ -32,12 +33,10 @@ algorithm = GFNDetailedBalanceVanilla(
     policy_network=policy_network_transformer,
     flow_network=f_network_transformer,
 )
-
-#algorithm.optimizer = optax.adam(1e-3)
-#algorithm.optimizer = algorithm.optimizer(DBVParameters, policy=optax.adam(1e-3), flow=optax.adam(1e-3))
+algorithm.optimizer = DBVParameters(policy=optax.adam(1e-3), flow=optax.adam(1e-3))
 
 key = jax.random.PRNGKey(0)
-params, state = algorithm.init(key, replay.sample(batch_size=10, rng=default_rng(0)))
+params, state = algorithm.init(key)
 
 # samples = [
 #     frozenset({(0, 1), (1, 2), (2, 4), (3, 2)}),
@@ -48,9 +47,10 @@ params, state = algorithm.init(key, replay.sample(batch_size=10, rng=default_rng
 
 samples = get_samples_from_env(env=env,
                                algorithm=algorithm,
-                               params=params,
+                               params=params.online,
                                net_state=state.network,
                                num_samples=100,
+                               key=key,
                                )
 
 log_probs = estimate_log_probs_backward(
@@ -58,7 +58,7 @@ log_probs = estimate_log_probs_backward(
     algorithm,
     params.online,
     state.network,
-    samples=samples,
+    samples=samples[0],
     rng=default_rng(0),
     batch_size=2,
     num_trajectories=100,
@@ -66,28 +66,28 @@ log_probs = estimate_log_probs_backward(
 )
 
 print('Backward estimation', log_probs)
-
 # samples = [
 #     frozenset({(0, 1), (1, 2), (2, 4), (3, 2)})
 # ]
-samples = get_samples_from_env(env=env,
-                               algorithm=algorithm,
-                               params=params,
-                               net_state=state.network,
-                               num_samples=100,
-                               )
-
-log_probs = estimate_log_probs_beam_search(
-    env,
-    algorithm,
-    params.online,
-    state.network,
-    samples=samples,
-    rng=default_rng(0),
-    batch_size=2,
-    beam_size=10,
-    num_trajectories=10,
-    verbose=True
-)
-
-print('Beam search estimation', log_probs)
+# samples = get_samples_from_env(env=env,
+#                                algorithm=algorithm,
+#                                params=params.online,
+#                                net_state=state.network,
+#                                num_samples=100,
+#                                key=key,
+#                                )
+#
+# log_probs = estimate_log_probs_beam_search( # only for dag-gfn env
+#     env,
+#     algorithm,
+#     params.online,
+#     state.network,
+#     samples=samples[0],
+#     rng=default_rng(0),
+#     batch_size=2,
+#     beam_size=10,
+#     num_trajectories=10,
+#     verbose=True
+# )
+#
+# print('Beam search estimation', log_probs)
