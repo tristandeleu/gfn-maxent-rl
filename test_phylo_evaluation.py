@@ -21,6 +21,7 @@ from numpy.random import default_rng
 
 from gfn_maxent_rl.utils import io
 import os
+import hydra
 import wandb
 import sys
 sys.path.insert(0, '..')
@@ -42,41 +43,58 @@ run.file('model.npz').download(root=root, exist_ok=True)
 with open(root / 'model.npz', 'rb') as f:
     params_online = DBVParameters(**io.load(f))
 
+# Patch
+params_online = jax.tree_util.tree_map(lambda x: x.item(), params_online)
+
 # ---------- Load the environment ------------
 DATA_FOLDER = Path('./gfn_maxent_rl/envs/phylo_gfn/datasets')
-env, infos = get_phylo_gfn_env(
-    dataset_name="DS1",
-    num_envs=1,
-    data_folder=DATA_FOLDER
+# env, infos = get_phylo_gfn_env(
+#     dataset_name="DS1",
+#     num_envs=1,
+#     data_folder=DATA_FOLDER
+# )
+
+env, infos = hydra.utils.instantiate(
+    run.config['env'],
+    num_envs=run.config['num_envs'],
+    seed=run.config['seed'],
+    rng=default_rng(run.config['seed']),
+)
+algorithm = hydra.utils.instantiate(run.config['algorithm'], env=env)
+net_state = DBVParameters(
+    policy={'~': {'normalization': jnp.array(1., dtype=jnp.float32)}},
+    flow={}
 )
 
-replay = ReplayBuffer(100, env)
+# replay = ReplayBuffer(100, env)
+#
+# algorithm = GFNDetailedBalanceVanilla(
+#     env=env,
+#     policy_network=policy_network_transformer,
+#     flow_network=f_network_transformer,
+# )
 
-algorithm = GFNDetailedBalanceVanilla(
-    env=env,
-    policy_network=policy_network_transformer,
-    flow_network=f_network_transformer,
-)
-algorithm.optimizer = DBVParameters(policy=optax.adam(1e-3), flow=optax.adam(1e-3))
+# algorithm.optimizer = DBVParameters(policy=optax.adam(1e-3), flow=optax.adam(1e-3))
 
 key = jax.random.PRNGKey(0)
-params, state = algorithm.init(key)
+# params, state = algorithm.init(key)
 
 
 # ---------- Test the estimation ------------
 samples = get_samples_from_env(env=env,
                                algorithm=algorithm,
                                params=params_online,
-                               net_state=state.network,
+                               net_state=net_state,
                                num_samples=100,
                                key=key,
+                               vebose=True,
                                )
 
 log_probs = estimate_log_probs_backward(
     env,
     algorithm,
     params_online,
-    state.network,
+    net_state,
     samples=samples[0],
     rng=default_rng(0),
     batch_size=2,
@@ -84,7 +102,25 @@ log_probs = estimate_log_probs_backward(
     verbose=True
 )
 
-print('Backward estimation', log_probs)
+
+# print('Backward estimation', log_probs)
+
+log_probs_values = jnp.array([log_probs[key] for key in log_probs.keys()])
+log_probs_keys = [*log_probs.keys()]
+samples_Return = samples[1]
+
+dict_samples = {}
+for i, tree in enumerate(samples[0]):
+    dict_samples[tree] = samples_Return[i]
+
+import pickle
+
+with open('dict_samples.pkl', 'wb') as f:
+    pickle.dump(dict_samples, f)
+
+with open('dict_log_probs.pkl', 'wb') as f:
+    pickle.dump(log_probs, f)
+
 
 # samples = [
 #     frozenset({(0, 1), (1, 2), (2, 4), (3, 2)})
