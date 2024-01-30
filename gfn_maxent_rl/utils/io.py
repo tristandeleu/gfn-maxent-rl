@@ -37,14 +37,16 @@ def _(obj, prefix):
 @to_dict.register(tuple)
 def _(obj, prefix):
     if not hasattr(obj, '_asdict'):
-        raise TypeError('No serialization for type "tuple".')
+        data = {f'{prefix}/type': 'tuple'}
+        items = [(str(i), value) for (i, value) in enumerate(obj)]
+    else:
+        data = {
+            f'{prefix}/type': 'namedtuple',
+            f'{prefix}/class': class_fullname(obj)
+        }
+        items = list(obj._asdict().items())
 
-    data = {
-        f'{prefix}/type': 'namedtuple',
-        f'{prefix}/class': class_fullname(obj)
-    }
-
-    for field, value in obj._asdict().items():
+    for field, value in items:
         field_data = to_dict(value, field)
         data.update({f'{prefix}/value/{k}': v for (k, v) in field_data.items()})
 
@@ -89,6 +91,11 @@ def from_dict(dictionary):
         value = dictionary.get('value', {})
         return to_haiku_dict(value)
     
+    elif obj_type == 'tuple':
+        data = {int(key): from_dict(value) for (key, value)
+            in dictionary['value'].items()}
+        return tuple(data[i] for i in range(len(data)))
+
     elif obj_type == 'namedtuple':
         klass = hydra.utils.get_class(dictionary['class'].item())
         data = {key: from_dict(value) for (key, value)
