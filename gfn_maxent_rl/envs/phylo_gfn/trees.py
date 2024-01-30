@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Union
 from functools import cached_property
 from numpy.random import default_rng
-from scipy.special import gammaln
 
 
 @dataclass(frozen=True)
@@ -90,7 +89,6 @@ class RootedTree:
 def generate_trajectories(tree, num_nodes, num_trajectories, rng=default_rng()):
     if isinstance(tree, Leaf):
         trajectories = np.zeros((num_trajectories, 0), dtype=np.int_)
-        log_num_trajectories = 0.
     else:
         # Get the last action
         action = tree.left.index * num_nodes \
@@ -99,8 +97,8 @@ def generate_trajectories(tree, num_nodes, num_trajectories, rng=default_rng()):
         actions = np.full((num_trajectories, 1), action, dtype=np.int_)
 
         # Get trajectories & number of trajectories
-        left_trajs, left_logn = generate_trajectories(tree.left, num_nodes, num_trajectories, rng=rng)
-        right_trajs, right_logn = generate_trajectories(tree.right, num_nodes, num_trajectories, rng=rng)
+        left_trajs = generate_trajectories(tree.left, num_nodes, num_trajectories, rng=rng)
+        right_trajs = generate_trajectories(tree.right, num_nodes, num_trajectories, rng=rng)
 
         # Shuffle the orders
         left_num, right_num = left_trajs.shape[1], right_trajs.shape[1]
@@ -115,12 +113,27 @@ def generate_trajectories(tree, num_nodes, num_trajectories, rng=default_rng()):
 
         trajectories = np.concatenate((prefix, actions), axis=1)
 
-        # Get log-number of trajectories
-        log_num_trajectories = left_logn + right_logn \
-            + gammaln(left_num + right_num + 1) \
-            - gammaln(left_num + 1) - gammaln(right_num + 1)
+    return trajectories
 
-    return (trajectories, log_num_trajectories)
+
+def get_log_backward_prob(actions):
+    batch_size, num_nodes = actions.shape
+    lefts, rights = np.triu_indices(num_nodes + 1, k=1)
+    arange = np.arange(batch_size)
+
+    types = np.ones((batch_size, num_nodes + 1), dtype=np.int_)
+    log_pB = np.zeros((batch_size,), dtype=np.float_)
+    for action in actions.T:
+        left, right = lefts[action], rights[action]
+
+        # Update the types
+        types[arange, left] = 2  # Rooted tree
+        types[arange, right] = 0  # Padding
+
+        # Update the log-probabilities
+        log_pB -= np.log(np.sum(types == 2, axis=1))
+
+    return log_pB
 
 
 if __name__ == '__main__':
@@ -140,7 +153,8 @@ if __name__ == '__main__':
     print(tree)
 
     rng = default_rng(0)
-    actions, log_num_trajectories = generate_trajectories(tree, 5, 5, rng)
+    actions = generate_trajectories(tree, 5, 5, rng)
+    log_pB = get_log_backward_prob(actions)
 
     print(actions)
-    print(np.exp(log_num_trajectories))
+    print(log_pB)

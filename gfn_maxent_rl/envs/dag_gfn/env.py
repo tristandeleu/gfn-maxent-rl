@@ -267,11 +267,11 @@ class DAGEnvironment(gym.vector.VectorEnv):
             if idx == max_retries:
                 raise RuntimeError('Impossible to find non-blacklisted trajectories')
 
-        # Log-number of trajectories
+        # Log-backward probabilities
         num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)
-        log_num_trajectories = gammaln(num_edges + 1)  # log(n!)
-        
-        return (trajectories, log_num_trajectories)
+        log_pB = np.repeat(-gammaln(num_edges[:, None] + 1), num_trajectories, axis=1)
+
+        return (trajectories, log_pB)
 
     # Functional API
 

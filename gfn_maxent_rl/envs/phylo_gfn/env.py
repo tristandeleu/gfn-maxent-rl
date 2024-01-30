@@ -7,7 +7,7 @@ from gym.spaces import Dict, Box, Discrete
 from functools import reduce
 from numpy.random import default_rng
 
-from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree, generate_trajectories
+from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree, generate_trajectories, get_log_backward_prob
 from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
 from gfn_maxent_rl.envs.phylo_gfn.policy import uniform_log_policy, action_mask
 from gfn_maxent_rl.envs.errors import StatesEnumerationError, PermutationEnvironmentError
@@ -215,13 +215,15 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
         trajectories = np.full((len(keys), num_trajectories, self.max_length),
             self.single_action_space.n - 1, dtype=np.int_)
-        log_num_trajectories = np.zeros((len(keys),), dtype=np.float_)
+        log_pB = np.zeros((len(keys), num_trajectories), dtype=np.float_)
 
         for i, key in enumerate(keys):
-            trajectories[i, :, :-1], log_num_trajectories[i] = generate_trajectories(key,
+            actions = generate_trajectories(key,
                 self.sequences.shape[0], num_trajectories, rng=rng)
+            log_pB[i] = get_log_backward_prob(actions)
+            trajectories[i, :, :-1] = actions
 
-        return (trajectories, log_num_trajectories)
+        return (trajectories, log_pB)
 
     # Functional API
     def func_reset(self, batch_size):

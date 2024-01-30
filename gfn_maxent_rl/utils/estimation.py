@@ -49,16 +49,16 @@ def estimate_log_probs_beam_search(
 
         # Complement with randomly sampled trajectories
         blacklist = dict((key, set(map(tuple, trajs.tolist()))) for (key, trajs) in zip(keys, fwd_trajectories))
-        bwd_trajectories, log_num_trajectories = env.backward_sample_trajectories(
+        bwd_trajectories, log_pB_bwd_trajs = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, blacklist=blacklist, rng=rng)
         
         # Compute the log-probabilities of the backward trajectories
-        log_probs_bwd_trajs = log_prob_fn(params, net_state, bwd_trajectories)
+        log_pF_bwd_trajs = log_prob_fn(params, net_state, bwd_trajectories)
 
         # Average over all trajectories, and offset by total number of trajectories
         # Assumption: the beam-size is smaller than the total number of trajectories
-        offset = log_num_trajectories + np.log1p(-np.exp(math.log(beam_size) - log_num_trajectories))
-        bwd_log_probs = offset + np.mean(log_probs_bwd_trajs, axis=1)
+        # TODO: Correct for rejection sampling, based on log p_B of the trajectories in beam search
+        bwd_log_probs = logsumexp(log_pF_bwd_trajs - log_pB_bwd_trajs, axis=1) - math.log(num_trajectories)
 
         # Store the log-probabilities
         log_probs_ = np.logaddexp(fwd_log_probs, bwd_log_probs)
@@ -91,12 +91,12 @@ def estimate_log_probs_backward(
     trajectory. Since the number of trajectories is combinatorially large,
     we write this sum as
 
-        P(x) = K * E_{tau ~ P_B}[\pi(tau)]
+        P(x) = E_{tau ~ P_B}[\pi(tau) / P_B(tau)]
     
     where the expectation is over trajectories sampled with the backward
-    policy P_B, and K is the number of trajectories to "x". We can then
-    use Monte-Carlo estimation to estimate this expectation, by sampling
-    multiple trajectories using (uniform) P_B.
+    policy P_B, and we used importance sampling. We can then use Monte-Carlo
+    estimation to estimate this expectation, by sampling multiple trajectories
+    using (uniform) P_B.
 
     Parameters
     ----------
@@ -151,15 +151,15 @@ def estimate_log_probs_backward(
     for keys, max_length in tqdm(env.key_batch_iterator(samples, batch_size=batch_size),
             total=num_batches, disable=(not verbose), **kwargs):
         # Sample random trajectories
-        trajectories, log_num_trajectories = env.backward_sample_trajectories(
+        trajectories, log_pB = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, rng=rng)
 
         # Compute the log-probabilities of all trajectories
-        log_probs_trajs = log_prob_fn(params, net_state, trajectories)
-        log_probs_trajs = np.asarray(log_probs_trajs)
+        log_pF = log_prob_fn(params, net_state, trajectories)
+        log_pF = np.asarray(log_pF)
 
-        # Average over all trajectories, and offset by total number of trajectories
-        log_probs_ = log_num_trajectories + np.mean(log_probs_trajs, axis=1)
+        # Average over trajectories (in log-space), with importance sampling
+        log_probs_ = logsumexp(log_pF - log_pB, axis=1) - math.log(num_trajectories)
         log_probs.update(zip(keys, log_probs_))
 
     return log_probs

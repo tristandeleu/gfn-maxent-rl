@@ -275,10 +275,10 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             if idx == max_retries:
                 raise RuntimeError('Impossible to find non-blacklisted trajectories')
 
-        # Log-number of trajectories
-        log_num_trajectories = np.full((len(keys),), gammaln(self.num_variables + 1))
-        
-        return (trajectories, log_num_trajectories)
+        # Log-backward probabilities
+        log_pB = np.full((len(keys), num_trajectories), -gammaln(self.num_variables + 1))
+
+        return (trajectories, log_pB)
 
     # Functional API
 
