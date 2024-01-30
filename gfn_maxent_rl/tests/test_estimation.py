@@ -1,12 +1,8 @@
-import numpy as np
-import jax.numpy as jnp
 import jax
 import optax
-import networkx as nx
 
 from numpy.random import default_rng
 
-from gfn_maxent_rl.data.replay_buffer import ReplayBuffer
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
 from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
 from gfn_maxent_rl.envs.dag_gfn.policy import policy_network
@@ -20,8 +16,6 @@ env, infos = get_dag_gfn_env(
     seed=0
 )
 
-replay = ReplayBuffer(100, env)
-
 algorithm = GFNDetailedBalance(
     env=env,
     network=policy_network
@@ -29,7 +23,7 @@ algorithm = GFNDetailedBalance(
 algorithm.optimizer = optax.adam(1e-3)
 
 key = jax.random.PRNGKey(0)
-params, state = algorithm.init(key, replay.dummy_samples)
+params, state = algorithm.init(key)
 
 samples = [
     frozenset({(0, 1), (1, 2), (2, 4), (3, 2)}),
