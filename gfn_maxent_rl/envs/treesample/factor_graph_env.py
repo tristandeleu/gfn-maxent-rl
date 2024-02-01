@@ -121,6 +121,13 @@ class FactorGraphEnvironment(gym.vector.VectorEnv):
             'mask': observations['mask'].astype(np.float32),
         }
 
+    @property
+    def observation_sequence_dtype(self):
+        return self.observation_dtype
+
+    def encode_sequence(self, observations):
+        return self.encode(observations)
+
     def decode_sequence(self, samples):
         return self.decode(samples['observations'])
 

@@ -126,6 +126,13 @@ class DAGEnvironment(gym.vector.VectorEnv):
             'graph': to_graphs_tuple(adjacency)
         }
 
+    @property
+    def observation_sequence_dtype(self):
+        return self.observation_dtype
+
+    def encode_sequence(self, observations):
+        return self.encode(observations)
+
     def decode_sequence(self, samples):
         return {
             'adjacency': self._decode(samples['observations']['adjacency']),
