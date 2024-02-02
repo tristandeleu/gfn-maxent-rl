@@ -27,12 +27,12 @@ def main(config):
     wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    config.experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
+    experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
     run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
-        name=config.experiment_name,
+        name=experiment_name,
         settings=wandb.Settings(start_method='fork'),
         mode=config.upload,
         config=wandb_config
@@ -77,7 +77,7 @@ def main(config):
     exploration_schedule = jax.jit(optax.linear_schedule(
         init_value=jnp.array(0.),
         end_value=jnp.array(1. - config.exploration.min_exploration),
-        transition_steps=config.num_iterations // config.exploration.warmup_prop,
+        transition_steps=config.exploration.warmup,
         transition_begin=config.prefill,
     ))
 

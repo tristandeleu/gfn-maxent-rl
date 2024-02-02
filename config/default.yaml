@@ -19,8 +19,8 @@ exploration:
   # Minimum value of epsilon-exploration
   min_exploration: 0.1
 
-  # Proportion of training steps for warming up exploration
-  warmup_prop: 2
+  # Number of steps for warming up exploration
+  warmup: 50_000  # 100_000 / 2
 
 # Learning rate
 lr: 1e-4
