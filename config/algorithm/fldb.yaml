@@ -13,19 +13,15 @@ algorithm:
 
   policy_frequency: 0
 
-policy_lr: 1e-4
-
-flow_lr: 1e-4
-
 optimizer:
   _target_: "gfn_maxent_rl.algos.forward_looking_detailed_balance.DBParameters"
 
   policy:
     _target_: "optax.adam"
-    learning_rate: ${policy_lr}
+    learning_rate: ${lr}
 
   flow:
     _target_: "optax.adam"
-    learning_rate: ${flow_lr}
+    learning_rate: ${lr}
 
 exp_name_algorithm: "fldb"
