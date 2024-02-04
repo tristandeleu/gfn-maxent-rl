@@ -110,6 +110,7 @@ class BaseAlgorithm(ABC):
         observation = np.zeros((1,), dtype=self.env.observation_dtype)
         return self.env.decode(observation)
 
+
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
 class GFNBaseAlgorithm(BaseAlgorithm):
