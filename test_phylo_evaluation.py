@@ -6,12 +6,7 @@ import networkx as nx
 
 from numpy.random import default_rng
 
-from gfn_maxent_rl.data.replay_buffer import ReplayBuffer
-from gfn_maxent_rl.envs.phylo_gfn.factories import get_phylo_gfn_env
-from gfn_maxent_rl.algos.detailed_balance_vanilla import GFNDetailedBalanceVanilla
-from gfn_maxent_rl.envs.phylo_gfn.policy import policy_network_transformer
-from gfn_maxent_rl.envs.phylo_gfn.policy import f_network_transformer
-from gfn_maxent_rl.algos.detailed_balance_vanilla import DBVParameters
+from gfn_maxent_rl.algos.forward_looking_detailed_balance import DBParameters
 
 from gfn_maxent_rl.utils.estimation import estimate_log_probs_backward, estimate_log_probs_beam_search
 from gfn_maxent_rl.utils.evaluations import get_samples_from_env
@@ -41,7 +36,7 @@ root = Path(os.getenv('SLURM_TMPDIR')) / run.id
 run.file('model.npz').download(root=root, exist_ok=True)
 
 with open(root / 'model.npz', 'rb') as f:
-    params_online = DBVParameters(**io.load(f))
+    params_online = DBParameters(**io.load(f))
 
 # Patch
 params_online = jax.tree_util.tree_map(lambda x: x.item(), params_online)
@@ -61,20 +56,20 @@ env, infos = hydra.utils.instantiate(
     rng=default_rng(run.config['seed']),
 )
 algorithm = hydra.utils.instantiate(run.config['algorithm'], env=env)
-net_state = DBVParameters(
+net_state = DBParameters(
     policy={'~': {'normalization': jnp.array(1., dtype=jnp.float32)}},
     flow={}
 )
 
 # replay = ReplayBuffer(100, env)
 #
-# algorithm = GFNDetailedBalanceVanilla(
+# algorithm = ForwardLookingDetailedBalance(
 #     env=env,
 #     policy_network=policy_network_transformer,
 #     flow_network=f_network_transformer,
 # )
 
-# algorithm.optimizer = DBVParameters(policy=optax.adam(1e-3), flow=optax.adam(1e-3))
+# algorithm.optimizer = DBParameters(policy=optax.adam(1e-3), flow=optax.adam(1e-3))
 
 key = jax.random.PRNGKey(0)
 # params, state = algorithm.init(key)
