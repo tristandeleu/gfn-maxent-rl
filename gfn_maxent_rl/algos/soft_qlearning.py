@@ -24,8 +24,6 @@ class SoftQLearning(BaseAlgorithm):
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def loss(self, online_params, target_params, state, samples):
-        action_masks = self.env.action_mask(samples['next_observation'])
-
         # Get Q(s_t, .) for the current state
         Q_t, _ = self.network.apply(
             online_params, state, samples['observation'])
@@ -34,7 +32,6 @@ class SoftQLearning(BaseAlgorithm):
         params = target_params if self.use_target else online_params
         Q_tp1, _ = self.network.apply(
             params, state, samples['next_observation'])
-        Q_tp1 = jnp.where(action_masks, Q_tp1, -jnp.inf)
         V_tp1 = jax.nn.logsumexp(Q_tp1, axis=1)
 
         # Compute the (modified) detailed balance loss
@@ -65,10 +62,5 @@ class SoftQLearning(BaseAlgorithm):
 
     def log_policy(self, params, state, observations):
         q_values, _ = self.network.apply(params, state, observations)
-
-        # Mask invalid actions
-        action_masks = self.env.action_mask(observations)
-        logits = jnp.where(action_masks, q_values, -jnp.inf)
-        log_pi = jax.nn.log_softmax(logits, axis=-1)
-
+        log_pi = jax.nn.log_softmax(q_values, axis=-1)
         return log_pi

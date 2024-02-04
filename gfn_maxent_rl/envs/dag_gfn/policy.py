@@ -64,8 +64,12 @@ def q_network(observations):
 
     q_values = jax.lax.batch_matmul(senders, receivers.transpose(0, 2, 1))
     q_values = q_values.reshape(batch_size, -1)
-    q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values.dtype)
 
+    # Mask the Q-values
+    masks_continue = observations['mask'].reshape(batch_size, -1)
+    q_values = jnp.where(masks_continue, q_values, -jnp.inf)
+
+    q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values.dtype)
     return jnp.concatenate((q_values, q_value_stop), axis=-1)
 
 

@@ -104,6 +104,10 @@ def q_network_mlp(num_categories):
         q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
         outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
+        # Mask the Q-values
+        action_masks = action_mask(observations['mask'], num_categories)
+        outputs = jnp.where(action_masks, outputs, -jnp.inf)
+
         return outputs
 
     return network
@@ -133,6 +137,10 @@ def q_network_transformer(num_categories):
         # Value of the stop action is 0
         q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
         outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
+
+        # Mask the Q-values
+        action_masks = action_mask(observations['mask'], num_categories)
+        outputs = jnp.where(action_masks, outputs, -jnp.inf)
 
         return outputs
 
