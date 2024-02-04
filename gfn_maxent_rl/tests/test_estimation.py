@@ -4,7 +4,7 @@ import optax
 from numpy.random import default_rng
 
 from gfn_maxent_rl.envs.dag_gfn.factories import get_dag_gfn_env
-from gfn_maxent_rl.algos.detailed_balance import GFNDetailedBalance
+from gfn_maxent_rl.algos.modified_detailed_balance import ModifiedDetailedBalance
 from gfn_maxent_rl.envs.dag_gfn.policy import policy_network
 
 from gfn_maxent_rl.utils.estimation import estimate_log_probs_backward, estimate_log_probs_beam_search
@@ -16,7 +16,7 @@ env, infos = get_dag_gfn_env(
     seed=0
 )
 
-algorithm = GFNDetailedBalance(
+algorithm = ModifiedDetailedBalance(
     env=env,
     network=policy_network
 )
