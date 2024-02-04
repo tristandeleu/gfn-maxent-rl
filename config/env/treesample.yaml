@@ -15,11 +15,6 @@ env:
   # Use a fixed ordering for variable assignments
   fixed_ordering: false
 
-env_wrapper:
-  _target_: "gfn_maxent_rl.envs.treesample.wrappers.RewardCorrection"
-  alpha: 1.0
-  weight: all_steps
-
 policy_network:
   _target_: "gfn_maxent_rl.envs.treesample.policy.policy_network_transformer"
   num_categories: ${env.num_categories}

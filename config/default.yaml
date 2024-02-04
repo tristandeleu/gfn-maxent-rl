@@ -12,6 +12,10 @@ replay:
 # Number of parallel environments
 num_envs: 8
 
+env_wrapper:
+  _target_: "gfn_maxent_rl.envs.wrappers.RewardCorrection"
+  alpha: 1.0
+
 # Number of iterations with a random policy to prefill the replay buffer
 prefill: 1000
 
