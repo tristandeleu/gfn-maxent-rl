@@ -17,7 +17,7 @@ from gfn_maxent_rl.envs.dag_gfn.functional import reset, step, state_to_observat
 
 class DAGEnvironment(gym.vector.VectorEnv):
     def __init__(self, num_envs, joint_model):
-        """GFlowNet environment for learning a distribution over DAGs.
+        """Environment for learning a distribution over DAGs.
 
         Parameters
         ----------

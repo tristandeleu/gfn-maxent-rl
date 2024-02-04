@@ -15,6 +15,25 @@ from gfn_maxent_rl.envs.phylo_gfn.functional import reset, step, state_to_observ
 
 
 class PhyloTreeEnvironment(gym.vector.VectorEnv):
+    """Phylogenetic Trees generation environment.
+
+    Parameters
+    ----------
+    num_envs : int
+        Number of parallel environments, or equivalently the number of
+        parallel trajectories to sample.
+
+    sequences : dict
+        A dictionary of (species, sequence) containing the biological
+        sequence for each species.
+
+    reward : object
+        An object specifying how to compute the delta-score and the log-reward.
+        See `phylo_gfn/rewards.py` for an example.
+
+    sequence_type : str
+        The type of sequence. Must be in ["DNA", "RNA", "DNA_WITH_GAP", "RNA_WITH_GAP"]
+    """
     def __init__(self, num_envs, sequences, reward, sequence_type='DNA'):
         char_dict = CHARACTERS_MAPS[sequence_type]
         self.sequences = np.array([[char_dict[c] for c in sequence]
