@@ -118,10 +118,6 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def init(self, key, normalization=1):
-        # Get dummy observation
-        observation = np.zeros((1,), dtype=self.env.observation_dtype)
-        observation = self.env.decode(observation)
-
         # Initialize the network parameters (both online, and possibly target)
         net_params, net_state = self.network.init(key, self._dummy_observation)
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))

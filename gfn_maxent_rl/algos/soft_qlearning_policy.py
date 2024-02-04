@@ -1,46 +1,52 @@
 import jax.numpy as jnp
 import haiku as hk
 import optax
-import jax
 
 from gfn_maxent_rl.algos.base import BaseAlgorithm, AlgoParameters, AlgoState
 
 
-class SoftQLearningVanilla(BaseAlgorithm):
+class SoftQLearningPolicy(BaseAlgorithm):
+    r"""Soft Q-Learning with policy parametrization.
+
+    This is a formulation of SQL adapted to the case where all the states of
+    the Markov Decision Process are terminating. This is parametrized by
+    a policy instead of a Q-function. The residual can be written as
+
+        \Delta(s, s') = \log \pi(s' | s) - \log \pi(s_f | s) + \log \pi(s_f | s') - r(s, s')
+    """
     def __init__(self, env, network, target=None, target_kwargs={}):
         super().__init__(env, target=target, target_kwargs=target_kwargs)
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def loss(self, online_params, target_params, state, samples):
-        action_masks = self.env.action_mask(samples['next_observation'])
-
-        # Get Q(G_t, .) for the current graph
-        Q_t, _ = self.network.apply(
+        # Get log pi(. | s_t) for the current state
+        log_pi_t, _ = self.network.apply(
             online_params, state, samples['observation'])
 
-        # Get Q(G_t+1, .) for the next graph
+        # Get log pi(. | s_t+1) for the next state
         params = target_params if self.use_target else online_params
-        Q_tp1, _ = self.network.apply(
+        log_pi_tp1, _ = self.network.apply(
             params, state, samples['next_observation'])
-        Q_tp1 = jnp.where(action_masks, Q_tp1, -jnp.inf)
-        V_tp1 = jax.nn.logsumexp(Q_tp1, axis=1)
 
-        # Compute the (modified) detailed balance loss
-        old_Q = jnp.take_along_axis(Q_t, samples['action'], axis=-1)
-        old_Q = jnp.squeeze(old_Q, axis=-1)
+        old_log_pi = jnp.take_along_axis(log_pi_t, samples['action'], axis=-1)
+        old_log_pi = jnp.squeeze(old_log_pi, axis=-1)
 
         rewards = jnp.squeeze(samples['reward'], axis=1)
-        errors = (rewards + V_tp1 - old_Q)
-        loss = jnp.mean(optax.huber_loss(errors, delta=1.))  # TODO: Modify delta
+        errors = (rewards + log_pi_t[:, -1] - log_pi_tp1[:, -1] - old_log_pi)
+        loss = jnp.mean(optax.huber_loss(errors, delta=1.))
 
         logs = {'errors': errors, 'loss': loss}
         return (loss, logs)
-
+    
     def init(self, key, normalization=1):
         # Initialize the network parameters (both online, and possibly target)
         online_params, net_state = self.network.init(key, self._dummy_observation)
         target_params = online_params if self.use_target else None
         params = AlgoParameters(online=online_params, target=target_params)
+
+        # Set the normalization to the size of the dataset
+        net_state['~']['normalization'] = jnp.full_like(
+            net_state['~']['normalization'], normalization)
 
         # Initialize the state
         state = AlgoState(
@@ -52,11 +58,5 @@ class SoftQLearningVanilla(BaseAlgorithm):
         return (params, state)
 
     def log_policy(self, params, state, observations):
-        q_values, _ = self.network.apply(params, state, observations)
-
-        # Mask invalid actions
-        action_masks = self.env.action_mask(observations)
-        logits = jnp.where(action_masks, q_values, -jnp.inf)
-        log_pi = jax.nn.log_softmax(logits, axis=-1)
-
+        log_pi, _ = self.network.apply(params, state, observations)
         return log_pi
