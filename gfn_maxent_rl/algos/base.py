@@ -95,11 +95,14 @@ class BaseAlgorithm(ABC):
 
     @optimizer.setter
     def optimizer(self, value):
-        self._optimizer = jax.tree_util.tree_map(
-            lambda opt: optax.chain(opt, optax.zero_nans()),
-            value,
-            is_leaf=lambda opt: isinstance(opt, optax.GradientTransformation)
-        )
+        if not isinstance(value, optax.GradientTransformation):
+            fields = value._fields
+            value = optax.multi_transform(
+                value._asdict(),
+                type(value)(**dict(zip(fields, fields)))
+            )
+
+        self._optimizer = optax.chain(value, optax.zero_nans())
 
     @property
     def use_target(self):
