@@ -2,42 +2,19 @@ import jax.numpy as jnp
 import numpy as np
 import jax
 import optax
-import wandb
 import hydra
-import omegaconf
 import networkx as nx
-import pickle
-import os
 
 from numpy.random import default_rng
 from tqdm.auto import trange
-import datetime
 
-from gfn_maxent_rl.utils.metrics import mean_phd, mean_shd, entropy
 from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
-from gfn_maxent_rl.utils.evaluations import evaluation
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
-from gfn_maxent_rl.utils import io
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
 def main(config):
-    time = f"{datetime.datetime.now():%Y-%m-%d_%H-%M}"
-    wandb_config = omegaconf.OmegaConf.to_container(
-        config, resolve=True, throw_on_missing=True
-    )
-    experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
-    run = wandb.init(
-        entity='tristandeleu_mila_01',
-        project='gfn_maxent_rl',
-        group=config.group_name,
-        name=experiment_name,
-        settings=wandb.Settings(start_method='fork'),
-        mode=config.upload,
-        config=wandb_config
-    )
-    
     # Set the RNGs for reproducibility
     rng = default_rng(config.seed)
     key = jax.random.PRNGKey(config.seed)
@@ -51,7 +28,7 @@ def main(config):
         rng=rng,
     )
     # Evaluation environment
-    env_valid, infos_valid = hydra.utils.instantiate(
+    env_valid, _ = hydra.utils.instantiate(
         config.env,
         num_envs=config.num_envs,
         seed=config.seed,
@@ -84,10 +61,9 @@ def main(config):
     target = {}
     try:
         target['log_probs'] = exact_log_posterior(env, batch_size=config.batch_size)
-        wandb.summary['target/entropy'] = entropy(target['log_probs'])
     except StatesEnumerationError:
         pass
-    evaluator = AsyncEvaluator(env, algorithm, run, ctx='spawn', target=target)
+    evaluator = AsyncEvaluator(env, algorithm, None, ctx='spawn', target=target)
 
     observations, _ = env.reset()
     indices = None
@@ -113,16 +89,6 @@ def main(config):
 
                 train_steps = iteration - config.prefill
 
-                if ('graph' in infos) and (iteration % config.evaluation_every == 0):
-                    valid_returns, valid_adjacencies = evaluation(params.online, state.network, key,
-                                                                  algorithm, env_valid, config)
-                    wandb.log({
-                        "mean_pairwise_hamming_distance": mean_phd(valid_adjacencies),
-                        "mean_structural_hamming_distance": mean_shd(ground_truth, valid_adjacencies),
-                        "average_Return": valid_returns,
-                        'step': train_steps,
-                    }, commit=False)
-
                 if train_steps % config.log_every == 0:
                     evaluator.enqueue(
                         params.online,
@@ -132,12 +98,6 @@ def main(config):
                     )
 
                 pbar.set_postfix(loss=f'{logs["loss"]:.3f}')
-                wandb.log({
-                    'loss': logs["loss"].item(),
-                    'step': train_steps,
-                    'loss/actor': logs['actor_loss'].mean().item() if ('actor_loss' in logs) else 0.,
-                    'loss/critic': logs['critic_loss'].mean().item() if ('critic_loss' in logs) else 0.,
-                })
 
     # Evaluate the final model
 
@@ -148,11 +108,6 @@ def main(config):
         batch_size=config.batch_size
     )
     metrics = evaluator.join()
-
-    # Save model
-    with open(os.path.join(wandb.run.dir, 'model.npz'), 'wb') as f:
-        io.save(f, params=params.online, state=state.network)
-    wandb.save('model.npz', policy='now')
 
 
 if __name__ == '__main__':
