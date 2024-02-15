@@ -11,8 +11,6 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
-  policy_frequency: 0
-
 optimizer:
   _target_: "gfn_maxent_rl.algos.forward_looking_detailed_balance.DBParameters"
 
