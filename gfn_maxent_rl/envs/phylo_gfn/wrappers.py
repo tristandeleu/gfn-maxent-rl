@@ -11,7 +11,7 @@ class RewardCorrection(gym.Wrapper):
         observations, rewards, terminated, truncated, infos = self.env.step(actions)
         num_parents = self.env.num_parents(observations)
 
-        correction = np.where(terminated | truncated, 0, -np.log1p(num_parents))
+        correction = np.where(terminated | truncated, 0, -np.log(num_parents))
         rewards = rewards + self.alpha * correction
 
         return (observations, rewards, terminated, truncated, infos)

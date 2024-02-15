@@ -6,6 +6,8 @@ import wandb
 import hydra
 import omegaconf
 import networkx as nx
+import pickle
+import os
 
 from numpy.random import default_rng
 from tqdm.auto import trange
@@ -16,6 +18,7 @@ from gfn_maxent_rl.utils.exhaustive import exact_log_posterior
 from gfn_maxent_rl.utils.async_evaluation import AsyncEvaluator
 from gfn_maxent_rl.utils.evaluations import evaluation
 from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.utils import io
 
 
 @hydra.main(version_base=None, config_path='config', config_name='default')
@@ -24,12 +27,12 @@ def main(config):
     wandb_config = omegaconf.OmegaConf.to_container(
         config, resolve=True, throw_on_missing=True
     )
-    config.experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
+    experiment_name = config.exp_name_algorithm + '_' + config.exp_name_env + '_' + time
     run = wandb.init(
         entity='tristandeleu_mila_01',
         project='gfn_maxent_rl',
         group=config.group_name,
-        name=config.experiment_name,
+        name=experiment_name,
         settings=wandb.Settings(start_method='fork'),
         mode=config.upload,
         config=wandb_config
@@ -74,7 +77,7 @@ def main(config):
     exploration_schedule = jax.jit(optax.linear_schedule(
         init_value=jnp.array(0.),
         end_value=jnp.array(1. - config.exploration.min_exploration),
-        transition_steps=config.num_iterations // config.exploration.warmup_prop,
+        transition_steps=config.exploration.warmup,
         transition_begin=config.prefill,
     ))
 
@@ -137,6 +140,7 @@ def main(config):
                 })
 
     # Evaluate the final model
+
     evaluator.enqueue(
         params.online,
         state.network,
@@ -144,6 +148,11 @@ def main(config):
         batch_size=config.batch_size
     )
     metrics = evaluator.join()
+
+    # Save model
+    with open(os.path.join(wandb.run.dir, 'model.npz'), 'wb') as f:
+        io.save(f, params=params.online, state=state.network)
+    wandb.save('model.npz', policy='now')
 
 
 if __name__ == '__main__':

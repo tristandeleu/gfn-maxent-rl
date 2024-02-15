@@ -11,7 +11,7 @@ class EpisodicReplayBuffer(ReplayBuffer):
         self.env = env
 
         dtype = np.dtype([
-            ('observations', env.observation_dtype, (env.max_length,)),
+            ('observations', env.observation_sequence_dtype, (env.max_length,)),
             ('actions', np.int_, (env.max_length,)),
             ('rewards', np.float_, (env.max_length,)),
 
@@ -29,7 +29,7 @@ class EpisodicReplayBuffer(ReplayBuffer):
 
         # Add data to the episode buffer
         episode_idx = self._replay['lengths'][indices]
-        self._replay['observations'][indices, episode_idx] = self.env.encode(observations)
+        self._replay['observations'][indices, episode_idx] = self.env.encode_sequence(observations)
         self._replay['actions'][indices, episode_idx] = actions
         self._replay['rewards'][indices, episode_idx] = rewards
 

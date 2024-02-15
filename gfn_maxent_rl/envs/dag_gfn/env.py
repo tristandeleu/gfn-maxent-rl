@@ -126,6 +126,13 @@ class DAGEnvironment(gym.vector.VectorEnv):
             'graph': to_graphs_tuple(adjacency)
         }
 
+    @property
+    def observation_sequence_dtype(self):
+        return self.observation_dtype
+
+    def encode_sequence(self, observations):
+        return self.encode(observations)
+
     def decode_sequence(self, samples):
         return {
             'adjacency': self._decode(samples['observations']['adjacency']),
@@ -200,8 +207,9 @@ class DAGEnvironment(gym.vector.VectorEnv):
 
         return self._state_graph
 
-    def observation_to_key(self, observation):
-        return frozenset(zip(*np.nonzero(observation['adjacency'])))
+    def observation_to_key(self, observations):
+        return [frozenset(zip(*np.nonzero(adjacency)))
+            for adjacency in observations['adjacency']]
 
     def key_batch_iterator(self, keys, batch_size, num_cutoffs=5):
         keys = sorted(keys, key=len)  # Sort graphs by number of edges
@@ -266,11 +274,11 @@ class DAGEnvironment(gym.vector.VectorEnv):
             if idx == max_retries:
                 raise RuntimeError('Impossible to find non-blacklisted trajectories')
 
-        # Log-number of trajectories
+        # Log-backward probabilities
         num_edges = np.asarray([len(key) for key in keys], dtype=np.int_)
-        log_num_trajectories = gammaln(num_edges + 1)  # log(n!)
-        
-        return (trajectories, log_num_trajectories)
+        log_pB = np.repeat(-gammaln(num_edges[:, None] + 1), num_trajectories, axis=1)
+
+        return (trajectories, log_pB)
 
     # Functional API
 

@@ -49,16 +49,16 @@ def estimate_log_probs_beam_search(
 
         # Complement with randomly sampled trajectories
         blacklist = dict((key, set(map(tuple, trajs.tolist()))) for (key, trajs) in zip(keys, fwd_trajectories))
-        bwd_trajectories, log_num_trajectories = env.backward_sample_trajectories(
+        bwd_trajectories, log_pB_bwd_trajs = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, blacklist=blacklist, rng=rng)
         
         # Compute the log-probabilities of the backward trajectories
-        log_probs_bwd_trajs = log_prob_fn(params, net_state, bwd_trajectories)
+        log_pF_bwd_trajs = log_prob_fn(params, net_state, bwd_trajectories)
 
         # Average over all trajectories, and offset by total number of trajectories
         # Assumption: the beam-size is smaller than the total number of trajectories
-        offset = log_num_trajectories + np.log1p(-np.exp(math.log(beam_size) - log_num_trajectories))
-        bwd_log_probs = offset + np.mean(log_probs_bwd_trajs, axis=1)
+        # TODO: Correct for rejection sampling, based on log p_B of the trajectories in beam search
+        bwd_log_probs = logsumexp(log_pF_bwd_trajs - log_pB_bwd_trajs, axis=1) - math.log(num_trajectories)
 
         # Store the log-probabilities
         log_probs_ = np.logaddexp(fwd_log_probs, bwd_log_probs)
@@ -79,6 +79,67 @@ def estimate_log_probs_backward(
         verbose=False,
         **kwargs
 ):
+    """Estimation of the log-probability of samples.
+
+    Given a policy \pi(s_t+1 | s_t), the log-probability of a sample "x"
+    is equal to
+
+        P(x) = \sum_{tau} \pi(tau)
+    
+    where the sum is over all the trajectories from the initial state
+    to the state "x", and \pi(tau) = \prod \pi(s_t+1 | s_t) along the
+    trajectory. Since the number of trajectories is combinatorially large,
+    we write this sum as
+
+        P(x) = E_{tau ~ P_B}[\pi(tau) / P_B(tau)]
+    
+    where the expectation is over trajectories sampled with the backward
+    policy P_B, and we used importance sampling. We can then use Monte-Carlo
+    estimation to estimate this expectation, by sampling multiple trajectories
+    using (uniform) P_B.
+
+    Parameters
+    ----------
+    env : gym.vector.VectorEnv instance
+        The environment.
+
+    algorithm : BaseAlgorithm instance
+        The algorithm. This must implement the `log_policy` method.
+
+    params : Any
+        The parameters of the networks (e.g., the policy network).
+        Note that this must be the parameters of the *online* network
+        (i.e., the parameters learned by the algorithm).
+
+    net_state : Any
+        The state of the network. This will be typically `state.network`,
+        where `state` is the state returned by the initialization of the
+        algorithm (and updated during training).
+
+    samples : list
+        The list of samples. Each sample must be a hashable key. See
+        `utils/evaluations.py:get_samples_from_env`.
+
+    rng : numpy.random.Generator instance
+        The RNG for numpy (to sample trajectories with P_B).
+
+    batch_size : int
+        The batch-size for calling the evaluation function. Increase or
+        decrease depending on the amount of (GPU) memory available.
+
+    num_trajectories : int
+        The number of trajectories for the Monte-Carlo estimation of the
+        expectation above.
+
+    verbose : bool
+        Display a progress bar.
+
+    Returns
+    -------
+    log_probs : dict (sample, float)
+        A dictionary containing the estimate of the log-probability for
+        each sample (samples are in the keys of the dictionary).
+    """
     log_probs = dict()
 
     # Vmap function over multiple samples
@@ -90,15 +151,15 @@ def estimate_log_probs_backward(
     for keys, max_length in tqdm(env.key_batch_iterator(samples, batch_size=batch_size),
             total=num_batches, disable=(not verbose), **kwargs):
         # Sample random trajectories
-        trajectories, log_num_trajectories = env.backward_sample_trajectories(
+        trajectories, log_pB = env.backward_sample_trajectories(
             keys, num_trajectories, max_length=max_length, rng=rng)
 
         # Compute the log-probabilities of all trajectories
-        log_probs_trajs = log_prob_fn(params, net_state, trajectories)
-        log_probs_trajs = np.asarray(log_probs_trajs)
+        log_pF = log_prob_fn(params, net_state, trajectories)
+        log_pF = np.asarray(log_pF)
 
-        # Average over all trajectories, and offset by total number of trajectories
-        log_probs_ = log_num_trajectories + np.mean(log_probs_trajs, axis=1)
+        # Average over trajectories (in log-space), with importance sampling
+        log_probs_ = logsumexp(log_pF - log_pB, axis=1) - math.log(num_trajectories)
         log_probs.update(zip(keys, log_probs_))
 
     return log_probs

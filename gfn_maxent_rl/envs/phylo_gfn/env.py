@@ -5,11 +5,13 @@ import operator as op
 
 from gym.spaces import Dict, Box, Discrete
 from functools import reduce
+from numpy.random import default_rng
 
-from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree
+from gfn_maxent_rl.envs.phylo_gfn.trees import Leaf, RootedTree, generate_trajectories, get_log_backward_prob
 from gfn_maxent_rl.envs.phylo_gfn.utils import CHARACTERS_MAPS, get_tree_type
 from gfn_maxent_rl.envs.phylo_gfn.policy import uniform_log_policy, action_mask
-from gfn_maxent_rl.envs.errors import StatesEnumerationError
+from gfn_maxent_rl.envs.errors import StatesEnumerationError, PermutationEnvironmentError
+from gfn_maxent_rl.envs.phylo_gfn.functional import reset, step, state_to_observation
 
 
 class PhyloTreeEnvironment(gym.vector.VectorEnv):
@@ -127,19 +129,18 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
 
     @property
     def max_length(self):
-        return self.sequences.shape[0] + 1
+        return self.sequences.shape[0]
+
+    def _encode(self, decoded):
+        encoded = decoded.reshape(decoded.shape[0], -1)
+        return np.packbits(encoded.astype(np.int32), axis=1)
 
     def encode(self, observations):
         batch_size = observations['sequences'].shape[0]
-
-        def _encode(decoded):
-            encoded = decoded.reshape(batch_size, -1)
-            return np.packbits(encoded.astype(np.int32), axis=1)
-
         encoded = np.empty((batch_size,), dtype=self.observation_dtype)
-        encoded['sequences'] = _encode(observations['sequences'])
+        encoded['sequences'] = self._encode(observations['sequences'])
         encoded['type'] = observations['type']
-        encoded['mask'] = _encode(observations['mask'])
+        encoded['mask'] = self._encode(observations['mask'])
         return encoded
 
     def _decode(self, encoded, shape):
@@ -157,8 +158,53 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
                 self.single_observation_space['mask'].shape)
         }
 
+    @property
+    def observation_sequence_dtype(self):
+        num_nodes = self.sequences.shape[0]
+        nbytes_mask = math.ceil((self.single_action_space.n - 1) / 8)  # num_nodes * (num_nodes - 1) // 2
+        return np.dtype([
+            ('type', np.int_, (num_nodes,)),
+            ('mask', np.uint8, (nbytes_mask,)),
+        ])
+
+    def encode_sequence(self, observations):
+        batch_size = observations['sequences'].shape[0]
+        encoded = np.empty((batch_size,), dtype=self.observation_sequence_dtype)
+        encoded['type'] = observations['type']
+        encoded['mask'] = self._encode(observations['mask'])
+        return encoded
+
     def decode_sequence(self, samples):
-        return self.decode(samples['observations'])
+        # Recreate sequences from actions
+        batch_size, max_length = samples['actions'].shape
+        num_nodes, sequence_length = self.sequences.shape
+        arange = np.arange(batch_size)
+
+        sequences = np.zeros((batch_size, max_length, num_nodes, sequence_length, 5), dtype=np.bool_)
+        sequences[:, 0] = ((self.sequences[..., None] & (1 << np.arange(5))) > 0)
+
+        for i in range(max_length - 1):
+            sequences[:, i + 1] = sequences[:, i]  # Copy previous sequences
+
+            actions = samples['actions'][:, i]
+            left, right = self._lefts[actions], self._rights[actions]
+            left_seq = sequences[arange, i + 1, left]
+            right_seq = sequences[arange, i + 1, right]
+
+            overlap = np.logical_and(left_seq, right_seq)
+            union = np.logical_or(left_seq, right_seq)
+            any_overlap = np.any(overlap, axis=-1, keepdims=True)
+            sequences[arange, i + 1, left] = np.where(any_overlap, overlap, union)
+            sequences[arange, i + 1, right] = 0
+
+        sequences = sequences.reshape(batch_size, max_length, num_nodes, -1)
+
+        return {
+            'sequences': sequences.astype(np.float32),
+            'type': samples['observations']['type'],
+            'mask': self._decode(samples['observations']['mask'],
+                self.single_observation_space['mask'].shape)
+        }
 
     # Method to interact with the algorithm (uniform sampling of action)
 
@@ -190,6 +236,48 @@ class PhyloTreeEnvironment(gym.vector.VectorEnv):
     def observation_to_key(self, observations):
         return [RootedTree.from_tuple(tree, self.sequences)
             for tree in observations['tree']]
+
+    def key_batch_iterator(self, keys, batch_size):
+        for index in range(0, len(keys), batch_size):
+            yield (keys[index:index + batch_size], self.max_length)
+
+    def key_to_action_mask(self, keys):
+        raise PermutationEnvironmentError('The environment does not generate '
+            'objects as permutations of actions.')
+
+    def backward_sample_trajectories(
+            self,
+            keys,
+            num_trajectories,
+            max_length=None,
+            blacklist=None,
+            rng=default_rng(),
+            max_retries=10
+    ):
+        if blacklist is not None:
+            raise NotImplementedError('Argument `blacklist` must be `None`.')
+
+        trajectories = np.full((len(keys), num_trajectories, self.max_length),
+            self.single_action_space.n - 1, dtype=np.int_)
+        log_pB = np.zeros((len(keys), num_trajectories), dtype=np.float_)
+
+        for i, key in enumerate(keys):
+            actions = generate_trajectories(key,
+                self.sequences.shape[0], num_trajectories, rng=rng)
+            log_pB[i] = get_log_backward_prob(actions)
+            trajectories[i, :, :-1] = actions
+
+        return (trajectories, log_pB)
+
+    # Functional API
+    def func_reset(self, batch_size):
+        return reset(batch_size, self.sequences)
+
+    def func_step(self, states, actions):
+        return step(states, actions)
+
+    def func_state_to_observation(self, states, trajectories):
+        return state_to_observation(states)
 
 
 if __name__ == '__main__':

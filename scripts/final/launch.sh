@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example usage:
-# bash ./scripts/final/launch.sh algorithm=sqlv env=treesample env.name=chain
+# bash ./scripts/final/launch.sh algorithm=sqlv env="phylo_gfn" group_name="final_phylo_gfn" batch_size=64
 
 OUTPUT_DIR=$SCRATCH/gfn-maxent-rl
 
