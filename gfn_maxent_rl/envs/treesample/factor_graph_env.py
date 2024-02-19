@@ -15,6 +15,28 @@ from gfn_maxent_rl.envs.treesample.functional import reset, step, state_to_obser
 
 class FactorGraphEnvironment(gym.vector.VectorEnv):
     def __init__(self, num_envs, graph, potentials, permutation):
+        """Environment for inference over a factor graph defined by its potentials.
+
+        Parameters
+        ----------
+        num_envs : int
+            Number of parallel environments, or equivalently the number of
+            parallel trajectories to sample.
+
+        graph : nx.Graph instance
+            The structure of the factor graph (as a Markov network).
+
+        potentials : dict
+            A dictionary of (clique, potential), where `clique` is a
+            representation of a clique (an array of node indices), and
+            potential is an array containing the potentials of all
+            possible assignments of the variables in the clique (array
+            of size num_categories ** (number of variables in clique)).
+
+        permutation : np.ndarray
+            An array of indices for a fixed order in which the variables
+            can be assigned (found by heuristics, unused in general).
+        """
         self.graph = graph
         self.potentials = potentials
         self.permutation = permutation

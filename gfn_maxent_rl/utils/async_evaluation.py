@@ -14,7 +14,7 @@ class AsyncEvaluator:
     def __init__(self, env, algorithm, run, ctx=None, target={}):
         self.env = env
         self.algorithm = algorithm
-        self.run = None if run.disabled else run
+        self.run = None if ((run is None) or run.disabled) else run
         self.ctx = mp.get_context(ctx)
         self.target = target
 

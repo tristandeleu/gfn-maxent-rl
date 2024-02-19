@@ -1,0 +1,25 @@
+# @package _global_
+
+algorithm:
+  _target_: "gfn_maxent_rl.algos.forward_looking_detailed_balance.ForwardLookingDetailedBalance"
+
+  policy_network: ${policy_network}
+
+  flow_network: ${flow_network}
+
+  target: "periodic"
+  target_kwargs:
+    update_period: 1000
+
+optimizer:
+  _target_: "gfn_maxent_rl.algos.forward_looking_detailed_balance.DBParameters"
+
+  policy:
+    _target_: "optax.adam"
+    learning_rate: ${lr}
+
+  flow:
+    _target_: "optax.adam"
+    learning_rate: ${lr}
+
+exp_name_algorithm: "fldb"

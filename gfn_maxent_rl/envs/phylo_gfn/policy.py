@@ -62,12 +62,6 @@ def policy_network_transformer(observations):
     )(encodings_combination)
     logits = jnp.squeeze(logits, axis=-1)
 
-    # # Edge lengths MLP
-    # edge_lengths = hk.nets.MLP(
-    #     (256, 256, output_size),
-    #     activation=jax.nn.leaky_relu
-    # )(tree_topology)
-
     norm = hk.get_state('normalization', (), init=jnp.ones)
     return log_policy(logits * norm, observations['mask'])
 
@@ -91,20 +85,23 @@ def q_network_transformer(observations):
     q_value_stop = jnp.zeros((batch_size, 1), dtype=q_values_continue.dtype)
     outputs = jnp.concatenate((q_values_continue, q_value_stop), axis=1)
 
+    # Mask the Q-values
+    action_masks = action_mask(observations['mask'])
+    outputs = jnp.where(action_masks, outputs, -jnp.inf)
+
     return outputs
 
 
 def f_network_transformer(observations):
-    batch_size, num_nodes, sequence_length, _ = observations['sequences'].shape
+    batch_size = observations['sequences'].shape[0]
     encoding = encoder(observations)
     encoding = encoding.reshape(batch_size, -1)
-    # outputs = jnp.average(encoding, axis=-1)
     outputs = hk.Linear(1)(encoding)
     outputs = jnp.squeeze(outputs, axis=-1)
 
     # Set the flow at terminating states to 0
     # /!\ This is assuming that the terminal state is the *only* child of
-    # any terminating state, which is true for the TreeSample environments.
+    # any terminating state, which is true for the PhyloGFN environment.
     is_intermediate = jnp.any(observations['mask'], axis=-1)
     outputs = jnp.where(is_intermediate, outputs, 0.)
 

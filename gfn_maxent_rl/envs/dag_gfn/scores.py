@@ -22,7 +22,6 @@ class LinearGaussianScore(MarginalLikelihood):
         self.obs_scale = obs_scale
 
     def local_score(self, variables, parents):
-        # https://tristandeleu.notion.site/Linear-Gaussian-Score-16a2ed3422fb4f1fa0b3f554ff57f67d
         num_samples, num_variables = self.data.shape
         masked_data = self.data * parents[:, None]
 

@@ -1,18 +1,16 @@
 # @package _global_
 
 algorithm:
-  _target_: "gfn_maxent_rl.algos.soft_qlearning_vanilla.SoftQLearningVanilla"
+  _target_: "gfn_maxent_rl.algos.modified_detailed_balance.ModifiedDetailedBalance"
 
-  network: ${value_network}
+  network: ${policy_network}
 
   target: "periodic"
   target_kwargs:
     update_period: 1000
 
-reward_correction: true
-
 optimizer:
   _target_: "optax.adam"
   learning_rate: ${lr}
 
-exp_name_algorithm: "sqlv"
+exp_name_algorithm: "mdb"

@@ -6,7 +6,19 @@ import warnings
 from gfn_maxent_rl.algos.base import GFNBaseAlgorithm
 
 
-class GFNTrajectoryBalance(GFNBaseAlgorithm):
+class TrajectoryBalance(GFNBaseAlgorithm):
+    r"""Trajectory Balance loss [1].
+
+    The residual can be written as
+
+        \Delta(\tau) = \log \frac{R(s_T)\prod_{t=0}^{T-1}P_B(s_t | s_t+1)}{Z\prod_{t=0}^{T}P_F(s_t+1 | s_t)}
+
+    References
+    ----------
+    [1] Nikolay Malkin, Moksh Jain, Emmanuel Bengio, Chen Sun, and Yoshua Bengio.
+        Trajectory balance: Improved credit assignment in GFlowNets. Advances
+        in Neural Information Processing Systems, 2022.
+    """
     def __init__(self, env, network, target=None, target_kwargs={}):
         if target is not None:
             warnings.warn('No target network used in GFNTrajectoryBalance, but '
@@ -14,7 +26,7 @@ class GFNTrajectoryBalance(GFNBaseAlgorithm):
         super().__init__(env, network, target=None, target_kwargs={})
 
     def loss(self, online_params, _, state, samples):
-        # Get log P_F(. | G_t) for full trajectory
+        # Get log P_F(. | s_t) for full trajectory
         v_model = jax.vmap(self.network.apply, in_axes=(None, None, 0))
         log_pi, _ = v_model(online_params.network, state, samples['observations'])
 

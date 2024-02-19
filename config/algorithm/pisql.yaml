@@ -1,7 +1,7 @@
 # @package _global_
 
 algorithm:
-  _target_: "gfn_maxent_rl.algos.detailed_balance.GFNDetailedBalance"
+  _target_: "gfn_maxent_rl.algos.soft_qlearning_policy.SoftQLearningPolicy"
 
   network: ${policy_network}
 
@@ -9,8 +9,10 @@ algorithm:
   target_kwargs:
     update_period: 1000
 
+reward_correction: true
+
 optimizer:
   _target_: "optax.adam"
   learning_rate: ${lr}
 
-exp_name_algorithm: "db"
+exp_name_algorithm: "pisql"

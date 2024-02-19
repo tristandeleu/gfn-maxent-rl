@@ -95,11 +95,14 @@ class BaseAlgorithm(ABC):
 
     @optimizer.setter
     def optimizer(self, value):
-        self._optimizer = jax.tree_util.tree_map(
-            lambda opt: optax.chain(opt, optax.zero_nans()),
-            value,
-            is_leaf=lambda opt: isinstance(opt, optax.GradientTransformation)
-        )
+        if not isinstance(value, optax.GradientTransformation):
+            fields = value._fields
+            value = optax.multi_transform(
+                value._asdict(),
+                type(value)(**dict(zip(fields, fields)))
+            )
+
+        self._optimizer = optax.chain(value, optax.zero_nans())
 
     @property
     def use_target(self):
@@ -110,6 +113,7 @@ class BaseAlgorithm(ABC):
         observation = np.zeros((1,), dtype=self.env.observation_dtype)
         return self.env.decode(observation)
 
+
 GFNParameters = namedtuple('GFNParameters', ['network', 'log_Z'])
 
 class GFNBaseAlgorithm(BaseAlgorithm):
@@ -118,10 +122,6 @@ class GFNBaseAlgorithm(BaseAlgorithm):
         self.network = hk.without_apply_rng(hk.transform_with_state(network))
 
     def init(self, key, normalization=1):
-        # Get dummy observation
-        observation = np.zeros((1,), dtype=self.env.observation_dtype)
-        observation = self.env.decode(observation)
-
         # Initialize the network parameters (both online, and possibly target)
         net_params, net_state = self.network.init(key, self._dummy_observation)
         online_params = GFNParameters(network=net_params, log_Z=jnp.array(0.))

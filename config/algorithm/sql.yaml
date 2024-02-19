@@ -3,7 +3,7 @@
 algorithm:
   _target_: "gfn_maxent_rl.algos.soft_qlearning.SoftQLearning"
 
-  network: ${policy_network}
+  network: ${value_network}
 
   target: "periodic"
   target_kwargs:
