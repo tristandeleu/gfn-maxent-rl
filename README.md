@@ -4,7 +4,7 @@
     <img src="_assets/gfn_maxent_rl.png" alt="gfn_maxent_rl" width="70%"></img>
 </div>
 
-This repository contains the official code in [JAX](https://github.com/google/jax) for a comparison between GFlowNets and Maximum Entropy RL algorithms, based on ([Deleu et al., 2024](https://github.com/tristandeleu/gfn-maxent-rl)).
+This repository contains the official code in [JAX](https://github.com/google/jax) for a comparison between GFlowNets and Maximum Entropy RL algorithms, based on ([Deleu et al., 2024](https://arxiv.org/abs/2402.10309)).
 
 > Tristan Deleu, Padideh Nouri, Nikolay Malkin, Doina Precup, Yoshua Bengio. *Discrete Probabilistic Inference as Control in Multi-path Environments*. 2024.
 
